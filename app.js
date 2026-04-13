@@ -37,6 +37,15 @@ let liveItunesTracks = [];
 let liveItunesCover = "";
 let liveItunesLoading = false;
 let liveItunesTimer = null;
+let searchMenuOutsideHandler = null;
+let searchMenuKeyHandler = null;
+let addSongSearchQuery = "";
+let addSongSearchLoading = false;
+let addSongSearchTimer = null;
+let addSongSearchRequestId = 0;
+let addSongSearchResults = [];
+let addSongSearchCover = "";
+let addSongRecommendationGroups = [];
 let currentAccount = null;
 const ACCOUNT_STORAGE_KEY = "melodify-account";
 let accountMenuOutsideHandler = null;
@@ -121,6 +130,266 @@ function normalizeItunesArtwork(artworkUrl) {
     if (!artworkUrl)
         return "";
     return artworkUrl.replace(/100x100bb\.jpg$/i, "600x600bb.jpg");
+}
+function makeAddSongSuggestion(track, cover, sourceLabel) {
+    return { track, cover, sourceLabel };
+}
+function inferRecommendationSeedFromPlaylist(pl) {
+    const seeds = [];
+    if (!pl)
+        return seeds;
+    const name = normalizeSearchText(pl.name);
+    const addSeed = (title, query) => {
+        if (!query.trim())
+            return;
+        const normalizedQuery = normalizeSearchText(query);
+        if (seeds.some(seed => normalizeSearchText(seed.query) === normalizedQuery))
+            return;
+        seeds.push({ title, query });
+    };
+    if (name.includes("pop"))
+        addSeed("Por género", "pop hits");
+    else if (name.includes("rock"))
+        addSeed("Por género", "rock classics");
+    else if (name.includes("latin") || name.includes("latino"))
+        addSeed("Por género", "latin hits");
+    else if (name.includes("chill") || name.includes("relax"))
+        addSeed("Por género", "chill vibes");
+    else if (name.includes("workout") || name.includes("gym") || name.includes("fitness"))
+        addSeed("Por género", "workout mix");
+    else if (name.includes("indie"))
+        addSeed("Por género", "indie pop");
+    else if (name.includes("dance") || name.includes("party"))
+        addSeed("Por género", "dance hits");
+    const anchorTrack = pl.current?.track ?? pl.getTracks()[0] ?? null;
+    if (anchorTrack?.artist) {
+        addSeed(`Por cantante · ${anchorTrack.artist}`, anchorTrack.artist);
+    }
+    if (anchorTrack?.artist && anchorTrack?.title) {
+        addSeed("Similares a esta canción", `${anchorTrack.artist} ${anchorTrack.title}`);
+    }
+    if (seeds.length === 0) {
+        addSeed("Sugerencias", "top pop hits");
+        addSeed("Sugerencias", "chill vibes");
+    }
+    return seeds.slice(0, 3);
+}
+function dedupeAddSongSuggestions(items) {
+    const seen = new Set();
+    const unique = [];
+    for (const item of items) {
+        const key = trackKey(item.track);
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        unique.push(item);
+    }
+    return unique;
+}
+async function loadAddSongRecommendations() {
+    const seeds = inferRecommendationSeedFromPlaylist(player.currentPlaylist);
+    if (seeds.length === 0) {
+        addSongRecommendationGroups = [];
+        return;
+    }
+    const groups = await Promise.all(seeds.map(async (seed) => {
+        try {
+            const data = await fetchItunesSongs(seed.query, 6);
+            const items = dedupeAddSongSuggestions(data.tracks.map(track => makeAddSongSuggestion(track, data.cover, seed.title)));
+            return { title: seed.title, sourceLabel: seed.query, items };
+        }
+        catch (_err) {
+            return { title: seed.title, sourceLabel: seed.query, items: [] };
+        }
+    }));
+    addSongRecommendationGroups = groups.filter(group => group.items.length > 0);
+}
+function renderAddSongSuggestionList(items, emptyMessage, groupKey) {
+    if (items.length === 0) {
+        return `<div class="add-song-empty">${escHtml(emptyMessage)}</div>`;
+    }
+    return items.map((item, index) => {
+        const key = `${groupKey}-${index}`;
+        return `
+      <article class="add-song-row" data-add-song-key="${escHtml(key)}" data-add-song-source="${escHtml(item.sourceLabel)}">
+        <div class="add-song-cover" style="${item.cover ? `background-image:url('${item.cover}'); background-size:cover; background-position:center;` : `background:var(--bg-hover);`}">
+          ${!item.cover ? musicNoteIcon(22) : ""}
+        </div>
+        <div class="add-song-copy">
+          <strong>${escHtml(item.track.title)}</strong>
+          <span>${escHtml(item.track.artist)} · ${escHtml(item.sourceLabel)}</span>
+        </div>
+        <button class="add-song-add-btn" type="button" data-add-song-list="${escHtml(groupKey)}" data-add-song-index="${index}">Agregar</button>
+      </article>
+    `;
+    }).join("");
+}
+function renderAddSongModal() {
+    const searchState = addSongSearchLoading
+        ? `<div class="add-song-empty">Buscando canciones en iTunes...</div>`
+        : addSongSearchQuery.trim() && addSongSearchResults.length === 0
+            ? `<div class="add-song-empty">No se encontraron coincidencias para "${escHtml(addSongSearchQuery.trim())}".</div>`
+            : addSongSearchQuery.trim()
+                ? renderAddSongSuggestionList(addSongSearchResults, "No hay resultados todavía.", "search")
+                : `<div class="add-song-empty">Escribe arriba para buscar una canción o artista.</div>`;
+    const recommendationMarkup = addSongRecommendationGroups.length > 0
+        ? addSongRecommendationGroups.map((group, groupIndex) => `
+        <section class="add-song-group">
+          <div class="add-song-group-head">
+            <div>
+              <h3>${escHtml(group.title)}</h3>
+              <span>${escHtml(group.sourceLabel)}</span>
+            </div>
+          </div>
+          <div class="add-song-list">
+            ${renderAddSongSuggestionList(group.items, "Sin recomendaciones disponibles.", `rec-${groupIndex}`)}
+          </div>
+        </section>
+      `).join("")
+        : `<div class="add-song-empty">Cargando recomendaciones...</div>`;
+    const modalIsOpen = modalEl.classList.contains("open");
+    modalEl.className = modalIsOpen ? "modal add-song-modal open" : "modal add-song-modal";
+    modalEl.innerHTML = `
+    <div class="add-song-shell" role="dialog" aria-modal="true" aria-labelledby="add-song-title">
+      <div class="modal-header add-song-header">
+        <div>
+          <div class="add-song-kicker">Agregar canción</div>
+          <h2 id="add-song-title">Buscar en iTunes</h2>
+        </div>
+        <button id="add-song-close" class="modal-close-btn" type="button" aria-label="Cerrar">${closeIcon(18)}</button>
+      </div>
+
+      <p class="add-song-copy">Busca una canción y agrega lo que quieras a la playlist actual. También verás sugerencias parecidas por género o cantante.</p>
+
+      <div class="home-search-shell add-song-search-shell">
+        ${searchIcon(18)}
+        <input type="text" id="add-song-search-input" class="home-search-input" placeholder="Buscar canción o artista" value="${escHtml(addSongSearchQuery)}" autocomplete="off" />
+        <button type="button" id="add-song-search-btn" class="add-song-search-btn">Buscar</button>
+      </div>
+
+      <div class="add-song-sections">
+        <section class="add-song-section">
+          <div class="add-song-group-head">
+            <div>
+              <h3>Resultados</h3>
+              <span>${addSongSearchQuery.trim() ? escHtml(addSongSearchQuery.trim()) : "Empieza a escribir para buscar"}</span>
+            </div>
+          </div>
+          <div class="add-song-list" id="add-song-search-results">
+            ${searchState}
+          </div>
+        </section>
+
+        <section class="add-song-section">
+          <div class="add-song-group-head">
+            <div>
+              <h3>Recomendaciones</h3>
+              <span>Según el género o cantante de esta playlist</span>
+            </div>
+          </div>
+          <div class="add-song-recommendations" id="add-song-recommendations">
+            ${recommendationMarkup}
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+    const searchInput = document.getElementById("add-song-search-input");
+    const searchBtn = document.getElementById("add-song-search-btn");
+    const closeBtn = document.getElementById("add-song-close");
+    searchInput?.addEventListener("input", () => {
+        scheduleAddSongSearch(searchInput.value);
+    });
+    searchBtn?.addEventListener("click", () => {
+        scheduleAddSongSearch(searchInput?.value ?? "");
+    });
+    searchInput?.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            scheduleAddSongSearch(searchInput.value);
+        }
+    });
+    closeBtn?.addEventListener("click", closeModal);
+    renderAddSongActionHandlers();
+}
+function renderAddSongActionHandlers() {
+    modalEl.querySelectorAll("[data-add-song-list]").forEach(row => {
+        row.addEventListener("click", () => {
+            const list = row.dataset.addSongList ?? "";
+            const index = Number(row.dataset.addSongIndex ?? "-1");
+            if (Number.isNaN(index) || index < 0)
+                return;
+            if (list === "search") {
+                const suggestion = addSongSearchResults[index];
+                if (suggestion)
+                    addSuggestionToCurrentPlaylist(suggestion.track);
+                return;
+            }
+            const recMatch = list.match(/^rec-(\d+)$/);
+            if (!recMatch)
+                return;
+            const group = addSongRecommendationGroups[Number(recMatch[1])];
+            const suggestion = group?.items[index];
+            if (suggestion)
+                addSuggestionToCurrentPlaylist(suggestion.track);
+        });
+    });
+}
+function addSuggestionToCurrentPlaylist(track) {
+    const pl = player.currentPlaylist;
+    if (!pl) {
+        showToast("Selecciona una playlist primero.", "error");
+        return;
+    }
+    pl.addTrackToEnd(new Track(track.title, track.artist, track.duration, track.previewUrl));
+    showToast(`"${track.title}" agregada a ${pl.name}.`);
+    closeModal();
+    renderAll();
+}
+function scheduleAddSongSearch(query) {
+    if (addSongSearchTimer !== null) {
+        clearTimeout(addSongSearchTimer);
+        addSongSearchTimer = null;
+    }
+    addSongSearchQuery = query;
+    const cleanQuery = query.trim();
+    if (!cleanQuery) {
+        addSongSearchResults = [];
+        addSongSearchCover = "";
+        addSongSearchLoading = false;
+        if (modalEl.classList.contains("open")) {
+            renderAddSongModal();
+        }
+        return;
+    }
+    addSongSearchLoading = true;
+    if (modalEl.classList.contains("open")) {
+        renderAddSongModal();
+    }
+    const requestId = ++addSongSearchRequestId;
+    addSongSearchTimer = window.setTimeout(async () => {
+        try {
+            const data = await fetchItunesSongs(cleanQuery, 10);
+            if (requestId !== addSongSearchRequestId)
+                return;
+            addSongSearchResults = data.tracks.map(track => makeAddSongSuggestion(track, data.cover, cleanQuery));
+            addSongSearchCover = data.cover;
+        }
+        catch (_err) {
+            if (requestId !== addSongSearchRequestId)
+                return;
+            addSongSearchResults = [];
+            addSongSearchCover = "";
+        }
+        finally {
+            if (requestId !== addSongSearchRequestId)
+                return;
+            addSongSearchLoading = false;
+            if (modalEl.classList.contains("open")) {
+                renderAddSongModal();
+            }
+        }
+    }, 300);
 }
 function scheduleLiveItunesSearch(query) {
     if (liveItunesTimer !== null) {
@@ -424,6 +693,117 @@ function ensureAccountMenuEl() {
     });
     [cancelBtn, closeBtn].forEach(btn => btn.addEventListener("click", closeMenu));
     return menu;
+}
+function ensureSearchModalEl() {
+    let overlay = document.getElementById("itunes-search-overlay");
+    if (overlay)
+        return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "itunes-search-overlay";
+    overlay.className = "itunes-search-overlay";
+    overlay.innerHTML = `
+    <div class="itunes-search-modal" role="dialog" aria-modal="true" aria-labelledby="itunes-search-title">
+      <div class="itunes-search-header">
+        <div>
+          <div class="itunes-search-kicker">Buscar</div>
+          <h2 id="itunes-search-title">Buscar en iTunes</h2>
+        </div>
+        <button id="itunes-search-close" class="itunes-search-close" type="button" aria-label="Cerrar búsqueda">${closeIcon(16)}</button>
+      </div>
+
+      <p class="itunes-search-copy">Escribe un artista, canción o estado de ánimo. Importaremos una playlist nueva con resultados de iTunes.</p>
+
+      <label class="itunes-search-label" for="itunes-search-input">Término de búsqueda</label>
+      <input id="itunes-search-input" class="itunes-search-input" type="text" placeholder="Por ejemplo: calm music, reggaeton, rock clásico" autocomplete="off" />
+
+      <div class="itunes-search-error" aria-live="polite"></div>
+
+      <div class="itunes-search-actions">
+        <button id="itunes-search-cancel" class="itunes-search-secondary" type="button">Cerrar</button>
+        <button id="itunes-search-submit" class="itunes-search-primary" type="button">Buscar</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector("#itunes-search-input");
+    const submitBtn = overlay.querySelector("#itunes-search-submit");
+    const cancelBtn = overlay.querySelector("#itunes-search-cancel");
+    const closeBtn = overlay.querySelector("#itunes-search-close");
+    const closeSearch = () => closeItunesSearchModal();
+    const runSearch = async () => {
+        const query = input.value.trim();
+        const error = overlay.querySelector(".itunes-search-error");
+        if (!query) {
+            if (error)
+                error.textContent = "Escribe algo para buscar en iTunes.";
+            input.focus();
+            return;
+        }
+        if (error)
+            error.textContent = "";
+        closeSearch();
+        try {
+            await importItunesPlaylistFromQuery(query);
+            homeSearchQuery = query;
+            viewMode = "home";
+            renderAll();
+        }
+        catch (_err) {
+            showToast("No se pudo consultar iTunes para esa búsqueda.", "error");
+        }
+    };
+    submitBtn.addEventListener("click", () => { void runSearch(); });
+    cancelBtn.addEventListener("click", closeSearch);
+    closeBtn.addEventListener("click", closeSearch);
+    input.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            void runSearch();
+        }
+    });
+    return overlay;
+}
+function openItunesSearchModal() {
+    const overlay = ensureSearchModalEl();
+    const input = overlay.querySelector("#itunes-search-input");
+    const error = overlay.querySelector(".itunes-search-error");
+    input.value = homeSearchQuery.trim();
+    if (error)
+        error.textContent = "";
+    overlay.classList.add("open");
+    input.focus();
+    input.select();
+    if (!searchMenuOutsideHandler) {
+        searchMenuOutsideHandler = (event) => {
+            const target = event.target;
+            const menu = document.getElementById("itunes-search-overlay");
+            const dialog = document.querySelector(".itunes-search-modal");
+            if (!target || !menu || !dialog)
+                return;
+            if (dialog.contains(target))
+                return;
+            closeItunesSearchModal();
+        };
+    }
+    if (!searchMenuKeyHandler) {
+        searchMenuKeyHandler = (event) => {
+            if (event.key === "Escape") {
+                closeItunesSearchModal();
+            }
+        };
+    }
+    document.addEventListener("mousedown", searchMenuOutsideHandler);
+    document.addEventListener("keydown", searchMenuKeyHandler);
+}
+function closeItunesSearchModal() {
+    const overlay = document.getElementById("itunes-search-overlay");
+    overlay?.classList.remove("open");
+    if (searchMenuOutsideHandler) {
+        document.removeEventListener("mousedown", searchMenuOutsideHandler);
+    }
+    if (searchMenuKeyHandler) {
+        document.removeEventListener("keydown", searchMenuKeyHandler);
+    }
 }
 function syncAccountMenu() {
     if (!currentAccount)
@@ -831,7 +1211,7 @@ function renderHome() {
         });
     }
     document.getElementById("home-open-search")?.addEventListener("click", async () => {
-        await openItunesSearchPrompt();
+        openItunesSearchModal();
     });
     document.querySelectorAll("[data-playlist-name]").forEach(card => {
         card.addEventListener("click", () => {
@@ -921,7 +1301,7 @@ function renderHomeContent() {
     `}
   `;
     document.getElementById("home-open-search")?.addEventListener("click", async () => {
-        await openItunesSearchPrompt();
+        openItunesSearchModal();
     });
     document.querySelectorAll("[data-playlist-name]").forEach(card => {
         card.addEventListener("click", () => {
@@ -1272,69 +1652,42 @@ function renderFooter() {
 // MODAL — Agregar canción
 // ═══════════════════════════════════════════════════════════
 function openModal() {
-    modalTitleInput.value = "";
-    modalArtistInput.value = "";
-    modalDurationInput.value = "";
-    modalPositionInput.value = "";
-    const size = player.currentPlaylist?.size ?? 0;
-    modalPositionInput.placeholder = size > 0 ? `1 – ${size + 1} (vacío = al final)` : "Al final";
-    modalEl.classList.add("open");
-    modalOverlayEl.classList.add("open");
-    modalTitleInput.focus();
-}
-function closeModal() {
-    modalEl.classList.remove("open");
-    modalOverlayEl.classList.remove("open");
-}
-modalCancelBtn.addEventListener("click", closeModal);
-modalOverlayEl.addEventListener("click", closeModal);
-modalSubmitBtn.addEventListener("click", () => {
-    const pl = player.currentPlaylist;
-    if (!pl) {
+    if (!player.currentPlaylist) {
         showToast("Selecciona una playlist primero.", "error");
         return;
     }
-    const title = modalTitleInput.value.trim();
-    const artist = modalArtistInput.value.trim();
-    const durStr = modalDurationInput.value.trim();
-    const posStr = modalPositionInput.value.trim();
-    if (!title || !artist) {
-        showToast("Título y artista son obligatorios.", "error");
-        return;
+    addSongSearchQuery = "";
+    addSongSearchLoading = false;
+    addSongSearchResults = [];
+    addSongSearchCover = "";
+    addSongRecommendationGroups = [];
+    if (addSongSearchTimer !== null) {
+        clearTimeout(addSongSearchTimer);
+        addSongSearchTimer = null;
     }
-    let duration = 180;
-    if (durStr) {
-        if (durStr.includes(":")) {
-            const [m, s] = durStr.split(":");
-            duration = parseInt(m) * 60 + parseInt(s || "0");
+    modalEl.classList.add("open");
+    modalOverlayEl.classList.add("open");
+    renderAddSongModal();
+    void loadAddSongRecommendations().then(() => {
+        if (modalEl.classList.contains("open")) {
+            renderAddSongModal();
         }
-        else {
-            duration = parseInt(durStr) || 180;
-        }
+    });
+    window.setTimeout(() => {
+        const searchInput = document.getElementById("add-song-search-input");
+        searchInput?.focus();
+    }, 0);
+}
+function closeModal() {
+    addSongSearchRequestId++;
+    if (addSongSearchTimer !== null) {
+        clearTimeout(addSongSearchTimer);
+        addSongSearchTimer = null;
     }
-    const track = new Track(title, artist, duration);
-    try {
-        if (posStr) {
-            const pos = parseInt(posStr) - 1;
-            pl.addTrackAtPosition(track, pos);
-            showToast(`"${title}" agregada en posición ${pos + 1}.`);
-        }
-        else {
-            pl.addTrackToEnd(track);
-            showToast(`"${title}" agregada.`);
-        }
-        closeModal();
-        renderAll();
-    }
-    catch (err) {
-        showToast(err.message, "error");
-    }
-});
-// Enter en modal
-[modalTitleInput, modalArtistInput, modalDurationInput, modalPositionInput].forEach(inp => {
-    inp.addEventListener("keydown", e => { if (e.key === "Enter")
-        modalSubmitBtn.click(); });
-});
+    modalEl.classList.remove("open");
+    modalOverlayEl.classList.remove("open");
+}
+modalOverlayEl.addEventListener("click", closeModal);
 // ── Crear playlist ────────────────────────────────────────
 newPlaylistBtn.addEventListener("click", () => {
     const name = newPlaylistInput.value.trim();
@@ -1365,19 +1718,8 @@ homeNavEl?.addEventListener("click", e => {
 });
 itunesSearchLinkEl?.addEventListener("click", async (e) => {
     e.preventDefault();
-    await openItunesSearchPrompt();
+    openItunesSearchModal();
 });
-async function openItunesSearchPrompt() {
-    const query = window.prompt("Buscar en iTunes", "")?.trim();
-    if (!query)
-        return;
-    try {
-        await importItunesPlaylistFromQuery(query);
-    }
-    catch (_err) {
-        showToast("No se pudo consultar iTunes para esa búsqueda.", "error");
-    }
-}
 // ── Handlers ──────────────────────────────────────────────
 function handleDeleteTrack(title) {
     const pl = player.currentPlaylist;
