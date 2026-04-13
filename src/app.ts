@@ -1344,8 +1344,8 @@ function renderHome(): void {
     });
   }
 
-  document.getElementById("home-open-search")?.addEventListener("click", async () => {
-    openItunesSearchModal();
+  document.getElementById("home-open-search")?.addEventListener("click", () => {
+    focusInlineHomeSearch(true);
   });
 
   document.querySelectorAll<HTMLElement>("[data-playlist-name]").forEach(card => {
@@ -1373,6 +1373,15 @@ function renderHome(): void {
     });
   });
 
+}
+
+function focusInlineHomeSearch(selectText = false): void {
+  const input = document.getElementById("home-search-input") as HTMLInputElement | null;
+  if (!input) return;
+  input.focus();
+  if (selectText) {
+    input.select();
+  }
 }
 
 function renderHomeContent(): void {
@@ -1436,8 +1445,8 @@ function renderHomeContent(): void {
     `}
   `;
 
-  document.getElementById("home-open-search")?.addEventListener("click", async () => {
-    openItunesSearchModal();
+  document.getElementById("home-open-search")?.addEventListener("click", () => {
+    focusInlineHomeSearch(true);
   });
 
   document.querySelectorAll<HTMLElement>("[data-playlist-name]").forEach(card => {
@@ -1847,6 +1856,29 @@ function closeModal(): void {
 
 modalOverlayEl.addEventListener("click", closeModal);
 
+function setupScrollFallbackHandlers(): void {
+  const isTextInputTarget = (target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+  };
+
+  const applyWheelScroll = (container: HTMLElement, event: WheelEvent) => {
+    if (isTextInputTarget(event.target)) return;
+    if (container.scrollHeight <= container.clientHeight) return;
+    event.preventDefault();
+    container.scrollTop += event.deltaY;
+  };
+
+  mainEl.addEventListener("wheel", e => {
+    applyWheelScroll(mainEl, e);
+  }, { passive: false });
+
+  sidebarPlaylistsEl.addEventListener("wheel", e => {
+    applyWheelScroll(sidebarPlaylistsEl, e);
+  }, { passive: false });
+}
+
 // ── Crear playlist ────────────────────────────────────────
 newPlaylistBtn.addEventListener("click", () => {
   const name = newPlaylistInput.value.trim();
@@ -1871,9 +1903,20 @@ homeNavEl?.addEventListener("click", e => {
   renderAll();
 });
 
-itunesSearchLinkEl?.addEventListener("click", async e => {
+itunesSearchLinkEl?.addEventListener("click", e => {
   e.preventDefault();
-  openItunesSearchModal();
+
+  const wasHome = viewMode === "home";
+  viewMode = "home";
+  isQueuePanelOpen = false;
+
+  if (!wasHome) {
+    renderAll();
+  }
+
+  window.requestAnimationFrame(() => {
+    focusInlineHomeSearch(true);
+  });
 });
 
 // ── Handlers ──────────────────────────────────────────────
@@ -2004,6 +2047,8 @@ const volIcon       = ()           => `<svg width="18" height="18" viewBox="0 0 
 
 // ── Arranque ──────────────────────────────────────────────
 async function bootstrap(): Promise<void> {
+  setupScrollFallbackHandlers();
+
   const storedAccount = loadStoredAccount();
   if (storedAccount) {
     currentAccount = storedAccount;

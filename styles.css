@@ -2869,3 +2869,19 @@ body.theme-light .home-pill.active {
     grid-template-columns: 1fr;
   }
 }
+
+/* Scroll guard: evita que overrides visuales bloqueen el desplazamiento principal */
+.main {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.playlist-layout,
+.playlist-content,
+.home-view,
+.tracks-table {
+  min-height: 0;
+}
