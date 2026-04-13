@@ -225,6 +225,7 @@ function renderAddSongSuggestionList(items, emptyMessage, groupKey) {
     }).join("");
 }
 function renderAddSongModal() {
+    const keepSearchFocus = document.activeElement?.id === "add-song-search-input";
     const searchState = addSongSearchLoading
         ? `<div class="add-song-empty">Buscando canciones en iTunes...</div>`
         : addSongSearchQuery.trim() && addSongSearchResults.length === 0
@@ -311,6 +312,19 @@ function renderAddSongModal() {
     });
     closeBtn?.addEventListener("click", closeModal);
     renderAddSongActionHandlers();
+    modalEl.style.width = "min(920px, 96vw)";
+    modalEl.style.maxHeight = "calc(100vh - 32px)";
+    modalEl.style.overflowX = "hidden";
+    modalEl.style.overflowY = "auto";
+    if (keepSearchFocus && searchInput) {
+        window.requestAnimationFrame(() => {
+            if (!modalEl.classList.contains("open"))
+                return;
+            searchInput.focus();
+            const cursor = searchInput.value.length;
+            searchInput.setSelectionRange(cursor, cursor);
+        });
+    }
 }
 function renderAddSongActionHandlers() {
     modalEl.querySelectorAll("[data-add-song-list]").forEach(row => {
@@ -363,9 +377,6 @@ function scheduleAddSongSearch(query) {
         return;
     }
     addSongSearchLoading = true;
-    if (modalEl.classList.contains("open")) {
-        renderAddSongModal();
-    }
     const requestId = ++addSongSearchRequestId;
     addSongSearchTimer = window.setTimeout(async () => {
         try {

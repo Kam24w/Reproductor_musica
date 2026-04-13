@@ -1089,6 +1089,40 @@ body {
 
 .home-toolbar {
   display: flex;
+
+/* Fijar el modal de agregar canción con scroll interno real. */
+.modal.add-song-modal {
+  width: min(920px, 96vw);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.modal.add-song-modal .add-song-shell {
+  max-height: none;
+  overflow: visible;
+}
+
+.modal.add-song-modal .add-song-sections {
+  min-height: 0;
+}
+
+.modal.add-song-modal .add-song-list,
+.modal.add-song-modal .add-song-recommendations {
+  max-height: min(42vh, 420px);
+  overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+  .modal.add-song-modal {
+    width: min(96vw, 100%);
+    max-height: calc(100vh - 16px);
+  }
+
+  .modal.add-song-modal .add-song-list,
+  .modal.add-song-modal .add-song-recommendations {
+    max-height: 32vh;
+  }
+}
   align-items: center;
   justify-content: flex-start;
   gap: 16px;
@@ -2567,6 +2601,8 @@ body.theme-light .itunes-search-close:hover {
 
   .add-song-modal {
     width: min(920px, 96vw);
+    max-height: calc(100vh - 32px);
+    overflow: hidden;
   }
 
   .add-song-shell {
@@ -2574,6 +2610,9 @@ body.theme-light .itunes-search-close:hover {
     flex-direction: column;
     gap: 18px;
     padding: 22px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    min-height: 0;
   }
 
   .add-song-header {
@@ -2631,6 +2670,7 @@ body.theme-light .itunes-search-close:hover {
     display: grid;
     grid-template-columns: 1.05fr .95fr;
     gap: 16px;
+    min-height: 0;
   }
 
   .add-song-section {
@@ -2638,6 +2678,7 @@ body.theme-light .itunes-search-close:hover {
     flex-direction: column;
     gap: 12px;
     min-width: 0;
+    min-height: 0;
   }
 
   .add-song-group-head {
@@ -2667,6 +2708,9 @@ body.theme-light .itunes-search-close:hover {
     flex-direction: column;
     gap: 10px;
     min-width: 0;
+    min-height: 0;
+    max-height: min(42vh, 420px);
+    overflow-y: auto;
   }
 
   .add-song-group {
@@ -2815,10 +2859,12 @@ body.theme-light .home-pill.active {
 @media (max-width: 720px) {
   .add-song-modal {
     width: min(96vw, 100%);
+    max-height: calc(100vh - 16px);
   }
 
   .add-song-shell {
     padding: 18px;
+    max-height: calc(100vh - 16px);
   }
 
   .add-song-shell h2 {
@@ -2827,6 +2873,11 @@ body.theme-light .home-pill.active {
 
   .add-song-sections {
     grid-template-columns: 1fr;
+  }
+
+  .add-song-list,
+  .add-song-recommendations {
+    max-height: 32vh;
   }
 
   .add-song-row {
