@@ -1,4 +1,5 @@
 import { Track, Playlist, PlaylistNode, MusicPlayer } from "./models.js";
+import { UI_TEXT, uiFormat } from "./texts.js";
 
 // ═══════════════════════════════════════════════════════════
 // CONTROLADOR UI — Melodify
@@ -19,6 +20,7 @@ const modalDurationInput   = document.getElementById("modal-duration") as HTMLIn
 const modalPositionInput   = document.getElementById("modal-position") as HTMLInputElement;
 const modalSubmitBtn       = document.getElementById("modal-submit")!;
 const modalCancelBtn       = document.getElementById("modal-cancel")!;
+const modalCancelBtn2      = document.getElementById("modal-cancel-2") as HTMLButtonElement | null;
 const newPlaylistInput     = document.getElementById("new-playlist-input") as HTMLInputElement;
 const newPlaylistBtn       = document.getElementById("new-playlist-btn")!;
 const itunesSearchLinkEl   = document.getElementById("itunes-search-link") as HTMLAnchorElement | null;
@@ -36,7 +38,7 @@ audioPlayer.volume = desiredVolume;
 let viewMode: "home" | "playlist" = "home";
 let homeSearchQuery = "";
 const favoriteTrackKeys = new Set<string>();
-const FAVORITES_PLAYLIST_NAME = "Mis favoritos";
+const FAVORITES_PLAYLIST_NAME = UI_TEXT.playlist.favoritesName;
 const FAVORITES_STORAGE_PREFIX = "melodify-favorites:";
 let liveItunesQuery = "";
 let liveItunesTracks: Track[] = [];
@@ -117,14 +119,14 @@ async function initSampleData(): Promise<void> {
     player.currentPlaylist = null;
     viewMode = "home";
 
-    showToast("Playlists de Melodify cargadas.");
+    showToast(UI_TEXT.toast.initialPlaylistsLoaded);
   } catch (_err) {
-    showToast("No se pudieron cargar las playlists iniciales de Melodify.", "error");
+    showToast(UI_TEXT.toast.initialPlaylistsError, "error");
   }
 }
 
 function buildPlaylistFromItunes(name: string, color: string, data: { tracks: Track[]; cover: string }): void {
-  const playlist = player.crearPlaylist(name, data.cover, color);
+  const playlist = player.createPlaylist(name, data.cover, color);
   data.tracks.forEach(track => playlist.addTrackToEnd(track));
 }
 
@@ -138,16 +140,16 @@ async function importItunesPlaylistFromQuery(query: string): Promise<void> {
 
   const existing = player.playlists.find(p => p.name === playlistName);
   if (existing) {
-    player.eliminarPlaylist(playlistName);
+    player.removePlaylist(playlistName);
   }
 
   const data = await fetchItunesSongs(cleanQuery, 12);
   buildPlaylistFromItunes(playlistName, color, data);
-  player.cambiarPlaylist(playlistName);
+  player.switchPlaylist(playlistName);
   stopProgress();
   currentProgress = 0;
   renderAll();
-  showToast(`Resultados cargados en Melodify: ${cleanQuery}`);
+  showToast(uiFormat.searchResultsLoaded(cleanQuery));
 }
 
 async function fetchItunesSongs(term: string, limit = 8): Promise<{ tracks: Track[]; cover: string }> {
@@ -173,7 +175,7 @@ async function fetchItunesSongs(term: string, limit = 8): Promise<{ tracks: Trac
     });
 
   if (tracks.length === 0) {
-    throw new Error("Melodify no devolvió canciones.");
+    throw new Error("Melodify did not return songs.");
   }
 
   const cover = normalizeItunesArtwork(results[0]?.artworkUrl100 ?? "");
@@ -201,20 +203,20 @@ function inferRecommendationSeedFromPlaylist(pl: Playlist | null): { title: stri
     seeds.push({ title, query });
   };
 
-  if (name.includes("pop")) addSeed("Por género", "pop hits");
-  else if (name.includes("rock")) addSeed("Por género", "rock classics");
-  else if (name.includes("latin") || name.includes("latino")) addSeed("Por género", "latin hits");
-  else if (name.includes("chill") || name.includes("relax")) addSeed("Por género", "chill vibes");
-  else if (name.includes("workout") || name.includes("gym") || name.includes("fitness")) addSeed("Por género", "workout mix");
-  else if (name.includes("indie")) addSeed("Por género", "indie pop");
-  else if (name.includes("dance") || name.includes("party")) addSeed("Por género", "dance hits");
+  if (name.includes("pop")) addSeed(UI_TEXT.common.byGenre, "pop hits");
+  else if (name.includes("rock")) addSeed(UI_TEXT.common.byGenre, "rock classics");
+  else if (name.includes("latin") || name.includes("latino")) addSeed(UI_TEXT.common.byGenre, "latin hits");
+  else if (name.includes("chill") || name.includes("relax")) addSeed(UI_TEXT.common.byGenre, "chill vibes");
+  else if (name.includes("workout") || name.includes("gym") || name.includes("fitness")) addSeed(UI_TEXT.common.byGenre, "workout mix");
+  else if (name.includes("indie")) addSeed(UI_TEXT.common.byGenre, "indie pop");
+  else if (name.includes("dance") || name.includes("party")) addSeed(UI_TEXT.common.byGenre, "dance hits");
 
   const anchorTrack = pl.current?.track ?? pl.getTracks()[0] ?? null;
   if (anchorTrack?.artist) {
     addSeed(`Por cantante · ${anchorTrack.artist}`, anchorTrack.artist);
   }
   if (anchorTrack?.artist && anchorTrack?.title) {
-    addSeed("Similares a esta canción", `${anchorTrack.artist} ${anchorTrack.title}`);
+    addSeed(UI_TEXT.common.similarToCurrentSong, `${anchorTrack.artist} ${anchorTrack.title}`);
   }
 
   if (seeds.length === 0) {
@@ -273,7 +275,7 @@ function renderAddSongSuggestionList(items: AddSongSuggestion[], emptyMessage: s
           <strong>${escHtml(item.track.title)}</strong>
           <span>${escHtml(item.track.artist)} · ${escHtml(item.sourceLabel)}</span>
         </div>
-        <button class="add-song-add-btn" type="button" data-add-song-list="${escHtml(groupKey)}" data-add-song-index="${index}">Agregar</button>
+        <button class="add-song-add-btn" type="button" data-add-song-list="${escHtml(groupKey)}" data-add-song-index="${index}">${UI_TEXT.addSong.addButton}</button>
       </article>
     `;
   }).join("");
@@ -283,12 +285,12 @@ function renderAddSongModal(): void {
   const keepSearchFocus = document.activeElement?.id === "add-song-search-input";
 
   const searchState = addSongSearchLoading
-    ? `<div class="add-song-empty">Buscando canciones en Melodify...</div>`
+    ? `<div class="add-song-empty">${UI_TEXT.addSong.loadingSongs}</div>`
     : addSongSearchQuery.trim() && addSongSearchResults.length === 0
-      ? `<div class="add-song-empty">No se encontraron coincidencias para "${escHtml(addSongSearchQuery.trim())}".</div>`
+      ? `<div class="add-song-empty">${UI_TEXT.addSong.noMatchesPrefix} "${escHtml(addSongSearchQuery.trim())}".</div>`
       : addSongSearchQuery.trim()
-        ? renderAddSongSuggestionList(addSongSearchResults, "No hay resultados todavía.", "search")
-        : `<div class="add-song-empty">Escribe arriba para buscar una canción o artista.</div>`;
+        ? renderAddSongSuggestionList(addSongSearchResults, UI_TEXT.addSong.noResultsYet, "search")
+        : `<div class="add-song-empty">${UI_TEXT.addSong.writeToSearch}</div>`;
 
   const recommendationMarkup = addSongRecommendationGroups.length > 0
     ? addSongRecommendationGroups.map((group, groupIndex) => `
@@ -300,11 +302,11 @@ function renderAddSongModal(): void {
             </div>
           </div>
           <div class="add-song-list">
-            ${renderAddSongSuggestionList(group.items, "Sin recomendaciones disponibles.", `rec-${groupIndex}`)}
+            ${renderAddSongSuggestionList(group.items, UI_TEXT.addSong.noRecommendations, `rec-${groupIndex}`)}
           </div>
         </section>
       `).join("")
-    : `<div class="add-song-empty">Cargando recomendaciones...</div>`;
+    : `<div class="add-song-empty">${UI_TEXT.addSong.loadingRecommendations}</div>`;
 
   const modalIsOpen = modalEl.classList.contains("open");
   modalEl.className = modalIsOpen ? "modal add-song-modal open" : "modal add-song-modal";
@@ -312,26 +314,26 @@ function renderAddSongModal(): void {
     <div class="add-song-shell" role="dialog" aria-modal="true" aria-labelledby="add-song-title">
       <div class="modal-header add-song-header">
         <div>
-          <div class="add-song-kicker">Agregar canción</div>
-          <h2 id="add-song-title">Buscar en Melodify</h2>
+          <div class="add-song-kicker">${UI_TEXT.addSong.titleKicker}</div>
+          <h2 id="add-song-title">${UI_TEXT.addSong.title}</h2>
         </div>
-        <button id="add-song-close" class="modal-close-btn" type="button" aria-label="Cerrar">${closeIcon(18)}</button>
+        <button id="add-song-close" class="modal-close-btn" type="button" aria-label="${UI_TEXT.common.close}">${closeIcon(18)}</button>
       </div>
 
-      <p class="add-song-copy">Busca una canción y agrega lo que quieras a la playlist actual. También verás sugerencias parecidas por género o cantante.</p>
+      <p class="add-song-copy">${UI_TEXT.addSong.modalCopy}</p>
 
       <div class="home-search-shell add-song-search-shell">
         ${searchIcon(18)}
-        <input type="text" id="add-song-search-input" class="home-search-input" placeholder="Buscar canción o artista" value="${escHtml(addSongSearchQuery)}" autocomplete="off" />
-        <button type="button" id="add-song-search-btn" class="add-song-search-btn">Buscar</button>
+        <input type="text" id="add-song-search-input" class="home-search-input" placeholder="${UI_TEXT.addSong.searchPlaceholder}" value="${escHtml(addSongSearchQuery)}" autocomplete="off" />
+        <button type="button" id="add-song-search-btn" class="add-song-search-btn">${UI_TEXT.addSong.searchButton}</button>
       </div>
 
       <div class="add-song-sections">
         <section class="add-song-section">
           <div class="add-song-group-head">
             <div>
-              <h3>Resultados</h3>
-              <span>${addSongSearchQuery.trim() ? escHtml(addSongSearchQuery.trim()) : "Empieza a escribir para buscar"}</span>
+              <h3>${UI_TEXT.addSong.resultsTitle}</h3>
+              <span>${addSongSearchQuery.trim() ? escHtml(addSongSearchQuery.trim()) : UI_TEXT.addSong.startTyping}</span>
             </div>
           </div>
           <div class="add-song-list" id="add-song-search-results">
@@ -342,8 +344,8 @@ function renderAddSongModal(): void {
         <section class="add-song-section">
           <div class="add-song-group-head">
             <div>
-              <h3>Recomendaciones</h3>
-              <span>Según el género o cantante de esta playlist</span>
+              <h3>${UI_TEXT.addSong.recommendationsTitle}</h3>
+              <span>${UI_TEXT.addSong.recommendationsCopy}</span>
             </div>
           </div>
           <div class="add-song-recommendations" id="add-song-recommendations">
@@ -415,12 +417,12 @@ function renderAddSongActionHandlers(): void {
 function addSuggestionToCurrentPlaylist(track: Track): void {
   const pl = player.currentPlaylist;
   if (!pl) {
-    showToast("Selecciona una playlist primero.", "error");
+    showToast(UI_TEXT.addSong.selectPlaylistFirst, "error");
     return;
   }
 
   pl.addTrackToEnd(new Track(track.title, track.artist, track.duration, track.previewUrl));
-  showToast(`"${track.title}" agregada a ${pl.name}.`);
+  showToast(uiFormat.trackAddedToPlaylist(track.title, pl.name));
   closeModal();
   renderAll();
 }
@@ -515,7 +517,7 @@ function getFavoritesPlaylist(): Playlist | null {
 function ensureFavoritesPlaylist(): Playlist {
   const existing = getFavoritesPlaylist();
   if (existing) return existing;
-  return player.crearPlaylist(FAVORITES_PLAYLIST_NAME, "", "#1DB954");
+  return player.createPlaylist(FAVORITES_PLAYLIST_NAME, "", "#1DB954");
 }
 
 function isTrackFavorite(track: Track | null): boolean {
@@ -531,14 +533,14 @@ function toggleTrackFavorite(track: Track): void {
     if (favoriteTrack) {
       favoritesPlaylist.removeTrack(favoriteTrack.title);
     }
-    showToast(`"${track.title}" quitada de favoritos.`);
+    showToast(uiFormat.favoriteRemoved(track.title));
   } else {
     favoriteTrackKeys.add(key);
     const alreadyInFavorites = favoritesPlaylist.getTracks().some(t => trackKey(t) === key);
     if (!alreadyInFavorites) {
       favoritesPlaylist.addTrackToEnd(new Track(track.title, track.artist, track.duration, track.previewUrl));
     }
-    showToast(`"${track.title}" agregada a favoritos.`);
+    showToast(uiFormat.favoriteAdded(track.title));
   }
   saveFavoriteKeysForCurrentAccount();
   renderAll();
@@ -719,12 +721,12 @@ function applyDjStyleShift(showMessage = false): Track | null {
   const targetPlaylist = pickNextDjPlaylist(currentName);
   if (!targetPlaylist) return null;
 
-  if (!player.cambiarPlaylist(targetPlaylist.name)) return null;
+  if (!player.switchPlaylist(targetPlaylist.name)) return null;
   const node = ensurePlaylistCurrentNode(targetPlaylist);
   if (!node) return null;
 
   if (showMessage) {
-    showToast(`DJ cambió el estilo a ${targetPlaylist.name}.`);
+    showToast(uiFormat.djStyleChanged(targetPlaylist.name));
   }
   return node.track;
 }
@@ -732,7 +734,7 @@ function applyDjStyleShift(showMessage = false): Track | null {
 async function handleDjSkipAdvance(): Promise<void> {
   const track = applyDjStyleShift(true);
   if (!track) {
-    showToast("DJ no encontró otra playlist para cambiar de estilo.", "error");
+    showToast(UI_TEXT.player.djNoPlaylist, "error");
     return;
   }
 
@@ -772,7 +774,7 @@ async function handleDjTrackEnded(): Promise<boolean> {
 
 async function preparePreviewPlayback(track: Track, restart = false): Promise<boolean> {
   if (!track.previewUrl) {
-    showToast("Esta canción no tiene preview disponible en Melodify.", "error");
+    showToast(UI_TEXT.player.previewMissing, "error");
     return false;
   }
 
@@ -792,7 +794,7 @@ async function preparePreviewPlayback(track: Track, restart = false): Promise<bo
     await audioPlayer.play();
   } catch (_err) {
     player.isPlaying = false;
-    showToast("No se pudo reproducir el preview de esta canción.", "error");
+    showToast(UI_TEXT.player.previewError, "error");
     return false;
   }
 
@@ -917,7 +919,7 @@ function ensureAccountChipEl(): HTMLButtonElement {
 function renderAccountChip(): void {
   const chip = ensureAccountChipEl();
   if (!currentAccount) {
-    chip.textContent = "CU";
+    chip.textContent = UI_TEXT.account.defaultChip;
     chip.removeAttribute("title");
     return;
   }
@@ -929,7 +931,7 @@ function renderAccountChip(): void {
 
   chip.textContent = initials;
   chip.title = currentAccount.name;
-  chip.setAttribute("aria-label", `Perfil de ${currentAccount.name}`);
+  chip.setAttribute("aria-label", uiFormat.accountChipTitle(currentAccount.name));
 }
 
 function ensureAccountMenuEl(): HTMLElement {
@@ -943,29 +945,29 @@ function ensureAccountMenuEl(): HTMLElement {
   menu.innerHTML = `
     <div class="account-menu-header">
       <div>
-        <div class="account-menu-kicker">Ajustes</div>
-        <div class="account-menu-title">Tu perfil</div>
+        <div class="account-menu-kicker">${UI_TEXT.account.settingsKicker}</div>
+        <div class="account-menu-title">${UI_TEXT.account.profileTitle}</div>
       </div>
-      <button id="account-menu-close" class="account-menu-close" type="button" aria-label="Cerrar ajustes">${closeIcon(16)}</button>
+      <button id="account-menu-close" class="account-menu-close" type="button" aria-label="${UI_TEXT.account.close}">${closeIcon(16)}</button>
     </div>
 
-    <label class="account-label" for="account-menu-name">Nombre</label>
+    <label class="account-label" for="account-menu-name">${UI_TEXT.account.nameLabel}</label>
     <input id="account-menu-name" class="account-input" type="text" maxlength="28" autocomplete="off" />
 
-    <label class="account-label">Tema</label>
+    <label class="account-label">${UI_TEXT.account.themeLabel}</label>
     <div class="account-theme-picker" id="account-menu-theme-picker">
-      <button type="button" class="account-theme-option" data-theme="dark">Oscuro</button>
-      <button type="button" class="account-theme-option" data-theme="light">Claro</button>
+      <button type="button" class="account-theme-option" data-theme="dark">${UI_TEXT.account.darkTheme}</button>
+      <button type="button" class="account-theme-option" data-theme="light">${UI_TEXT.account.lightTheme}</button>
     </div>
 
     <div class="account-menu-error" aria-live="polite"></div>
 
     <div class="account-menu-actions">
-      <button id="account-menu-cancel" class="account-menu-secondary" type="button">Cerrar</button>
-      <button id="account-menu-save" class="account-menu-primary" type="button">Guardar cambios</button>
+      <button id="account-menu-cancel" class="account-menu-secondary" type="button">${UI_TEXT.account.close}</button>
+      <button id="account-menu-save" class="account-menu-primary" type="button">${UI_TEXT.account.saveChanges}</button>
     </div>
 
-    <button id="account-menu-logout" class="account-menu-secondary" type="button">Salir del perfil</button>
+    <button id="account-menu-logout" class="account-menu-secondary" type="button">${UI_TEXT.account.logout}</button>
   `;
   document.body.appendChild(menu);
 
@@ -998,7 +1000,7 @@ function ensureAccountMenuEl(): HTMLElement {
     const name = nameInput.value.trim();
 
     if (!name) {
-      if (error) error.textContent = "Escribe un nombre para guardar los cambios.";
+      if (error) error.textContent = UI_TEXT.account.saveNameRequired;
       nameInput.focus();
       return;
     }
@@ -1013,13 +1015,13 @@ function ensureAccountMenuEl(): HTMLElement {
     applyAccountTheme(activeTheme);
     renderAccountChip();
     closeMenu();
-    showToast("Ajustes guardados.");
+    showToast(UI_TEXT.account.settingsSaved);
   });
 
   logoutBtn.addEventListener("click", () => {
     clearStoredAccount();
     clearProfileSessionState();
-    showToast("Saliste del perfil.");
+    showToast(UI_TEXT.account.loggedOut);
     void promptAccountSetup();
   });
 
@@ -1039,22 +1041,22 @@ function ensureSearchModalEl(): HTMLElement {
     <div class="itunes-search-modal" role="dialog" aria-modal="true" aria-labelledby="itunes-search-title">
       <div class="itunes-search-header">
         <div>
-          <div class="itunes-search-kicker">Buscar</div>
-          <h2 id="itunes-search-title">Buscar en Melodify</h2>
+          <div class="itunes-search-kicker">${UI_TEXT.search.kicker}</div>
+          <h2 id="itunes-search-title">${UI_TEXT.search.title}</h2>
         </div>
-        <button id="itunes-search-close" class="itunes-search-close" type="button" aria-label="Cerrar búsqueda">${closeIcon(16)}</button>
+        <button id="itunes-search-close" class="itunes-search-close" type="button" aria-label="${UI_TEXT.common.close}">${closeIcon(16)}</button>
       </div>
 
-      <p class="itunes-search-copy">Escribe un artista, canción o estado de ánimo. Importaremos una playlist nueva dentro de Melodify.</p>
+      <p class="itunes-search-copy">${UI_TEXT.search.copy}</p>
 
-      <label class="itunes-search-label" for="itunes-search-input">Término de búsqueda</label>
-      <input id="itunes-search-input" class="itunes-search-input" type="text" placeholder="Por ejemplo: calm music, reggaeton, rock clásico" autocomplete="off" />
+      <label class="itunes-search-label" for="itunes-search-input">${UI_TEXT.search.termLabel}</label>
+      <input id="itunes-search-input" class="itunes-search-input" type="text" placeholder="${UI_TEXT.search.placeholder}" autocomplete="off" />
 
       <div class="itunes-search-error" aria-live="polite"></div>
 
       <div class="itunes-search-actions">
-        <button id="itunes-search-cancel" class="itunes-search-secondary" type="button">Cerrar</button>
-        <button id="itunes-search-submit" class="itunes-search-primary" type="button">Buscar</button>
+        <button id="itunes-search-cancel" class="itunes-search-secondary" type="button">${UI_TEXT.common.close}</button>
+        <button id="itunes-search-submit" class="itunes-search-primary" type="button">${UI_TEXT.search.kicker}</button>
       </div>
     </div>
   `;
@@ -1071,7 +1073,7 @@ function ensureSearchModalEl(): HTMLElement {
     const query = input.value.trim();
     const error = overlay!.querySelector<HTMLElement>(".itunes-search-error");
     if (!query) {
-      if (error) error.textContent = "Escribe algo para buscar en Melodify.";
+      if (error) error.textContent = UI_TEXT.search.emptyQuery;
       input.focus();
       return;
     }
@@ -1085,7 +1087,7 @@ function ensureSearchModalEl(): HTMLElement {
       viewMode = "home";
       renderAll();
     } catch (_err) {
-      showToast("No se pudo consultar Melodify para esa búsqueda.", "error");
+      showToast(UI_TEXT.search.requestError, "error");
     }
   };
 
@@ -1243,19 +1245,19 @@ function ensureAccountSetupModal(): HTMLElement {
   overlay.className = "account-setup-overlay";
   overlay.innerHTML = `
     <div class="account-setup-modal" role="dialog" aria-modal="true" aria-labelledby="account-setup-title">
-      <h2 id="account-setup-title">Configura tu cuenta</h2>
-      <p>Escribe tu nombre y elige el tema de tu cuenta.</p>
-      <label class="account-label" for="account-name-input">Nombre</label>
-      <input id="account-name-input" class="account-input" type="text" maxlength="28" placeholder="Tu nombre" autocomplete="off" />
+      <h2 id="account-setup-title">${UI_TEXT.account.setupTitle}</h2>
+      <p>${UI_TEXT.account.setupCopy}</p>
+      <label class="account-label" for="account-name-input">${UI_TEXT.account.nameLabel}</label>
+      <input id="account-name-input" class="account-input" type="text" maxlength="28" placeholder="${UI_TEXT.account.yourName}" autocomplete="off" />
 
-      <label class="account-label" for="account-theme-select">Tema</label>
+      <label class="account-label" for="account-theme-select">${UI_TEXT.account.themeLabel}</label>
       <div class="account-theme-picker" id="account-theme-picker">
-        <button type="button" class="account-theme-option active" data-theme="dark">Oscuro</button>
-        <button type="button" class="account-theme-option" data-theme="light">Claro</button>
+        <button type="button" class="account-theme-option active" data-theme="dark">${UI_TEXT.account.darkTheme}</button>
+        <button type="button" class="account-theme-option" data-theme="light">${UI_TEXT.account.lightTheme}</button>
       </div>
 
       <div id="account-setup-error" class="account-error"></div>
-      <button id="account-save-btn" class="account-save-btn">Entrar</button>
+      <button id="account-save-btn" class="account-save-btn">${UI_TEXT.account.enter}</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1298,7 +1300,7 @@ async function promptAccountSetup(): Promise<void> {
       const theme = getSelectedTheme();
 
       if (!name) {
-        errorEl.textContent = "Debes escribir tu nombre.";
+        errorEl.textContent = UI_TEXT.account.nameRequired;
         nameInput.focus();
         return;
       }
@@ -1354,13 +1356,13 @@ function renderSidebar(): void {
         <span class="sidebar-pl-meta">Playlist · ${pl.size} canciones</span>
       </div>
       ${canDelete
-        ? `<button class="sidebar-pl-delete" data-name="${escHtml(pl.name)}" title="Eliminar">${closeIcon(14)}</button>`
+        ? `<button class="sidebar-pl-delete" data-name="${escHtml(pl.name)}" title="${UI_TEXT.common.delete}">${closeIcon(14)}</button>`
         : ""}
     `;
 
     li.addEventListener("click", e => {
       if ((e.target as HTMLElement).closest(".sidebar-pl-delete")) return;
-      player.cambiarPlaylist(pl.name);
+      player.switchPlaylist(pl.name);
       viewMode = "playlist";
       isQueuePanelOpen = false;
       stopProgress();
@@ -1409,18 +1411,18 @@ function renderMain(): void {
             ${!pl.cover ? musicNoteIcon(56) : ""}
           </div>
           <div class="main-header-info">
-            <span class="main-header-type">PLAYLIST</span>
+            <span class="main-header-type">${UI_TEXT.playlist.label}</span>
             <h1 class="main-header-title">${escHtml(pl.name)}</h1>
-            <p class="main-header-meta">${pl.size} canciones &nbsp;·&nbsp; ${pl.formattedTotalDuration()}</p>
+            <p class="main-header-meta">${pl.size} ${UI_TEXT.common.songsWord} &nbsp;·&nbsp; ${pl.formattedTotalDuration()}</p>
             <div class="main-header-actions">
               <button class="btn-play-big" id="btn-play-big">
                 ${player.isPlaying && player.currentPlaylist === pl ? pauseIcon(28) : playIcon(28)}
               </button>
               <button class="btn-add-track" id="btn-view-queue">
-                ${listIcon(16)} ${isQueuePanelOpen ? "Ocultar cola" : "Ver cola"}
+                ${listIcon(16)} ${isQueuePanelOpen ? UI_TEXT.playlist.hideQueue : UI_TEXT.playlist.showQueue}
               </button>
               <button class="btn-add-track" id="btn-add-track">
-                ${plusIcon(16)} Agregar canción
+                ${plusIcon(16)} ${UI_TEXT.playlist.addSong}
               </button>
             </div>
           </div>
@@ -1430,15 +1432,15 @@ function renderMain(): void {
         <div class="tracks-table">
           <div class="tracks-thead">
             <span class="col-num">#</span>
-            <span class="col-info">TÍTULO</span>
+            <span class="col-info">${UI_TEXT.playlist.titleColumn}</span>
             <span class="col-dur">${clockIcon(14)}</span>
           </div>
           <ul class="tracks-tbody" id="tracks-tbody">
             ${tracks.length === 0
               ? `<li class="tracks-empty">
                    ${musicNoteIcon(40)}
-                   <p>Esta playlist está vacía</p>
-                   <span>Agrega canciones con el botón de arriba</span>
+                    <p>${UI_TEXT.playlist.emptyTitle}</p>
+                    <span>${UI_TEXT.playlist.emptyCopy}</span>
                  </li>`
               : tracks.map((t, i) => renderTrackRow(t, i, pl)).join("")
             }
@@ -1449,11 +1451,11 @@ function renderMain(): void {
       ${isQueuePanelOpen ? `
       <aside class="queue-sidebar">
         <div class="queue-sidebar-head">
-          <h3>Cola</h3>
+          <h3>${UI_TEXT.playlist.queueTitle}</h3>
         </div>
 
         <div class="queue-block">
-          <h4>Sonando</h4>
+          <h4>${UI_TEXT.playlist.nowPlayingTitle}</h4>
           ${nowPlayingTrack
             ? `<div class="queue-now-item">
                 <div class="queue-now-cover">${musicNoteIcon(18)}</div>
@@ -1462,16 +1464,16 @@ function renderMain(): void {
                   <span>${escHtml(nowPlayingTrack.artist)}</span>
                 </div>
               </div>`
-            : `<div class="queue-empty">No hay canción seleccionada.</div>`}
+            : `<div class="queue-empty">${UI_TEXT.playlist.noSongSelected}</div>`}
         </div>
 
         <div class="queue-controls">
-          <button class="queue-ctrl${hasPrevInQueue ? "" : " disabled"}" id="queue-prev">${skipPrevIcon()} Anterior</button>
-          <button class="queue-ctrl${hasNextInQueue ? "" : " disabled"}" id="queue-next">Siguiente ${skipNextIcon()}</button>
+          <button class="queue-ctrl${hasPrevInQueue ? "" : " disabled"}" id="queue-prev">${skipPrevIcon()} ${UI_TEXT.playlist.previous}</button>
+          <button class="queue-ctrl${hasNextInQueue ? "" : " disabled"}" id="queue-next">${UI_TEXT.playlist.next} ${skipNextIcon()}</button>
         </div>
 
         <div class="queue-block">
-          <h4>Siguiente de: ${escHtml(pl.name)}</h4>
+          <h4>${UI_TEXT.playlist.nextFromPrefix} ${escHtml(pl.name)}</h4>
           <ul class="queue-list">
             ${renderQueueUpcomingNodes(pl)}
           </ul>
@@ -1564,7 +1566,7 @@ function renderHome(): void {
       <div class="home-toolbar">
         <div class="home-search-shell">
           ${searchIcon(18)}
-          <input type="text" id="home-search-input" class="home-search-input" placeholder="¿Qué quieres reproducir?" value="${escHtml(homeSearchQuery)}" autocomplete="off" />
+          <input type="text" id="home-search-input" class="home-search-input" placeholder="${UI_TEXT.search.homePlaceholder}" value="${escHtml(homeSearchQuery)}" autocomplete="off" />
         </div>
       </div>
 
@@ -1603,7 +1605,7 @@ function renderHome(): void {
     card.addEventListener("click", () => {
       const playlist = player.playlists.find(pl => pl.name === card.dataset.playlistName);
       if (!playlist) return;
-      player.cambiarPlaylist(playlist.name);
+      player.switchPlaylist(playlist.name);
       viewMode = "playlist";
       renderAll();
     });
@@ -1615,7 +1617,7 @@ function renderHome(): void {
       if (!playlist) return;
       const trackTitle = row.dataset.trackTitle ?? "";
       if (!playlist.selectTrack(trackTitle)) return;
-      player.cambiarPlaylist(playlist.name);
+      player.switchPlaylist(playlist.name);
       viewMode = "playlist";
       const selectedTrack = playlist.current?.track ?? null;
       if (!selectedTrack) return;
@@ -1653,8 +1655,8 @@ function renderHomeContent(): void {
   contentEl.innerHTML = `
     <section class="home-section">
       <div class="home-section-head">
-        <h2>${homeSearchQuery.trim() ? "Resultados" : "Playlists destacadas"}</h2>
-        <button class="home-link" id="home-open-search">Mostrar todos</button>
+        <h2>${homeSearchQuery.trim() ? UI_TEXT.playlist.searchResultsTitle : UI_TEXT.playlist.featuredTitle}</h2>
+        <button class="home-link" id="home-open-search">${UI_TEXT.search.showAll}</button>
       </div>
       <div class="home-card-row">
         ${homeSearchQuery.trim()
@@ -1670,7 +1672,7 @@ function renderHomeContent(): void {
     ${searchQuery ? `
     <section class="home-section">
       <div class="home-section-head">
-        <h2>Canciones</h2>
+        <h2>${UI_TEXT.search.songsSection}</h2>
       </div>
       <div class="home-track-results">
         ${searchResults.length > 0
@@ -1685,7 +1687,7 @@ function renderHomeContent(): void {
     ` : `
     <section class="home-section">
       <div class="home-section-head">
-        <h2>Recientes</h2>
+        <h2>${UI_TEXT.search.recentSection}</h2>
       </div>
       <div class="home-card-grid">
         ${recent.length > 0
@@ -1704,7 +1706,7 @@ function renderHomeContent(): void {
     card.addEventListener("click", () => {
       const playlist = player.playlists.find(pl => pl.name === card.dataset.playlistName);
       if (!playlist) return;
-      player.cambiarPlaylist(playlist.name);
+      player.switchPlaylist(playlist.name);
       viewMode = "playlist";
       renderAll();
     });
@@ -1716,7 +1718,7 @@ function renderHomeContent(): void {
       if (!playlist) return;
       const trackTitle = row.dataset.trackTitle ?? "";
       if (!playlist.selectTrack(trackTitle)) return;
-      player.cambiarPlaylist(playlist.name);
+      player.switchPlaylist(playlist.name);
       viewMode = "playlist";
       currentProgress = 0;
       currentTrackDuration = playlist.current?.track.duration ?? 0;
@@ -1765,7 +1767,7 @@ function renderHomePlaylistCard(pl: Playlist): string {
       </div>
       <div class="home-playlist-meta">
         <span class="home-card-title">${escHtml(pl.name)}</span>
-        <span class="home-card-subtitle">Playlist · ${pl.size} canciones</span>
+        <span class="home-card-subtitle">${uiFormat.playlistMeta(pl.size)}</span>
       </div>
     </article>
   `;
@@ -1796,8 +1798,8 @@ function renderHomeSearchResult(result: HomeSearchResult): string {
         <strong>${escHtml(result.track.title)}</strong>
         <span>${escHtml(result.track.artist)} · ${escHtml(result.playlist.name)}</span>
       </div>
-      <button class="home-result-heart${favorite ? " active" : ""}" data-favorite-track="${escHtml(result.track.title)}" title="${favorite ? "Quitar de favoritos" : "Agregar a favoritos"}">${favoriteIcon(favorite)}</button>
-      <button class="home-result-play" title="Reproducir">${playIcon(18)}</button>
+      <button class="home-result-heart${favorite ? " active" : ""}" data-favorite-track="${escHtml(result.track.title)}" title="${favorite ? UI_TEXT.common.removeFromFavorites : UI_TEXT.common.addToFavorites}">${favoriteIcon(favorite)}</button>
+      <button class="home-result-play" title="${UI_TEXT.common.play}">${playIcon(18)}</button>
     </article>
   `;
 }
@@ -1810,10 +1812,10 @@ function renderLiveItunesResult(track: Track, cover: string): string {
       </div>
       <div class="home-result-copy">
         <strong>${escHtml(track.title)}</strong>
-        <span>${escHtml(track.artist)} · Melodify</span>
+        <span>${escHtml(uiFormat.searchSource(track.artist))}</span>
       </div>
-      <button class="home-result-heart${isTrackFavorite(track) ? " active" : ""}" data-favorite-track="${escHtml(track.title)}" title="${isTrackFavorite(track) ? "Quitar de favoritos" : "Agregar a favoritos"}">${favoriteIcon(isTrackFavorite(track))}</button>
-      <button class="home-result-play" title="Reproducir preview">${playIcon(18)}</button>
+      <button class="home-result-heart${isTrackFavorite(track) ? " active" : ""}" data-favorite-track="${escHtml(track.title)}" title="${isTrackFavorite(track) ? UI_TEXT.common.removeFromFavorites : UI_TEXT.common.addToFavorites}">${favoriteIcon(isTrackFavorite(track))}</button>
+      <button class="home-result-play" title="${UI_TEXT.common.playPreview}">${playIcon(18)}</button>
     </article>
   `;
 }
@@ -1827,7 +1829,7 @@ function renderHomeRecentCard(pl: Playlist): string {
       </div>
       <div class="home-recent-copy">
         <strong>${escHtml(pl.name)}</strong>
-        <span>${firstTrack ? escHtml(firstTrack.artist) : `Playlist · ${pl.size} canciones`}</span>
+        <span>${firstTrack ? escHtml(firstTrack.artist) : uiFormat.playlistMeta(pl.size)}</span>
       </div>
     </article>
   `;
@@ -1884,8 +1886,8 @@ function renderTrackRow(track: Track, index: number, pl: Playlist): string {
       </span>
       <span class="col-dur">
         <span class="track-dur-val">${track.formattedDuration()}</span>
-        <button class="track-favorite-btn${favorite ? " active" : ""}" data-favorite-title="${escHtml(track.title)}" title="${favorite ? "Quitar de favoritos" : "Agregar a favoritos"}">${favoriteIcon(favorite)}</button>
-        <button class="track-delete-btn" data-title="${escHtml(track.title)}" title="Eliminar">
+        <button class="track-favorite-btn${favorite ? " active" : ""}" data-favorite-title="${escHtml(track.title)}" title="${favorite ? UI_TEXT.common.removeFromFavorites : UI_TEXT.common.addToFavorites}">${favoriteIcon(favorite)}</button>
+        <button class="track-delete-btn" data-title="${escHtml(track.title)}" title="${UI_TEXT.common.delete}">
           ${trashIcon(15)}
         </button>
       </span>
@@ -1895,7 +1897,7 @@ function renderTrackRow(track: Track, index: number, pl: Playlist): string {
 
 function renderQueueNodes(pl: Playlist): string {
   if (!pl.head) {
-    return `<li class="queue-empty">La cola está vacía. Agrega canciones para navegar con anterior y siguiente.</li>`;
+    return `<li class="queue-empty">${UI_TEXT.playlist.queueEmptyWithHint}</li>`;
   }
 
   const rows: string[] = [];
@@ -1923,7 +1925,7 @@ function renderQueueNodes(pl: Playlist): string {
 
 function renderQueueUpcomingNodes(pl: Playlist): string {
   if (!pl.head) {
-    return `<li class="queue-empty">La cola está vacía.</li>`;
+    return `<li class="queue-empty">${UI_TEXT.playlist.queueEmpty}</li>`;
   }
 
   const rows: string[] = [];
@@ -1944,7 +1946,7 @@ function renderQueueUpcomingNodes(pl: Playlist): string {
   }
 
   if (rows.length === 0) {
-    return `<li class="queue-empty">No hay próximas canciones en la cola.</li>`;
+    return `<li class="queue-empty">${UI_TEXT.playlist.queueNoUpcoming}</li>`;
   }
 
   return rows.join("");
@@ -1968,21 +1970,21 @@ function renderFooter(): void {
           : `<div class="footer-cover-fallback">${musicNoteIcon(22)}</div>`}
       </div>
       <div class="footer-track-info">
-        <span class="footer-track-title">${track ? escHtml(track.title) : "Sin reproducción"}</span>
+        <span class="footer-track-title">${track ? escHtml(track.title) : "Sin reproduccion"}</span>
         <span class="footer-track-artist">${track ? escHtml(track.artist) : "—"}</span>
       </div>
-      ${track ? `<button class="footer-heart${isTrackFavorite(track) ? " active" : ""}" id="footer-heart" title="${isTrackFavorite(track) ? "Quitar de favoritos" : "Agregar a favoritos"}">${favoriteIcon(isTrackFavorite(track))}</button>` : ""}
+      ${track ? `<button class="footer-heart${isTrackFavorite(track) ? " active" : ""}" id="footer-heart" title="${isTrackFavorite(track) ? UI_TEXT.common.removeFromFavorites : UI_TEXT.common.addToFavorites}">${favoriteIcon(isTrackFavorite(track))}</button>` : ""}
     </div>
 
     <!-- CONTROLS -->
     <div class="footer-center">
       <div class="footer-btns">
-        <button class="footer-ctrl${hasPrev ? "" : " disabled"}" id="fc-prev" title="Anterior">${skipPrevIcon()}</button>
+        <button class="footer-ctrl${hasPrev ? "" : " disabled"}" id="fc-prev" title="${UI_TEXT.playlist.previous}">${skipPrevIcon()}</button>
         <button class="footer-ctrl footer-play" id="fc-play">
           ${player.isPlaying ? pauseIcon(26) : playIcon(26)}
         </button>
-        <button class="footer-ctrl${hasNext ? "" : " disabled"}" id="fc-next" title="Siguiente">${skipNextIcon()}</button>
-        <button class="footer-ctrl footer-dj${djModeEnabled ? " active" : ""}" id="fc-dj" title="Modo DJ">DJ</button>
+        <button class="footer-ctrl${hasNext ? "" : " disabled"}" id="fc-next" title="${UI_TEXT.playlist.next}">${skipNextIcon()}</button>
+        <button class="footer-ctrl footer-dj${djModeEnabled ? " active" : ""}" id="fc-dj" title="${UI_TEXT.player.djModeTitle}">DJ</button>
       </div>
       <div class="footer-progress">
         <span class="footer-time">${formatTime(currentProgress)}</span>
@@ -2024,7 +2026,7 @@ function renderFooter(): void {
 
   document.getElementById("fc-dj")?.addEventListener("click", () => {
     djModeEnabled = !djModeEnabled;
-    showToast(djModeEnabled ? "Modo DJ activado." : "Modo DJ desactivado.");
+    showToast(djModeEnabled ? UI_TEXT.player.djEnabled : UI_TEXT.player.djDisabled);
     renderFooter();
   });
 
@@ -2032,7 +2034,7 @@ function renderFooter(): void {
     if (!pl?.current) return;
     const selectedTrack = pl.current.track;
     if (!selectedTrack.previewUrl) {
-      showToast("Esta canción no tiene preview disponible en Melodify.", "error");
+      showToast(UI_TEXT.player.previewMissing, "error");
       return;
     }
     const playing = player.togglePlay();
@@ -2077,7 +2079,7 @@ function renderFooter(): void {
 // ═══════════════════════════════════════════════════════════
 function openModal(): void {
   if (!player.currentPlaylist) {
-    showToast("Selecciona una playlist primero.", "error");
+    showToast(UI_TEXT.addSong.selectPlaylistFirst, "error");
     return;
   }
 
@@ -2145,19 +2147,22 @@ function setupScrollFallbackHandlers(): void {
 // ── Crear playlist ────────────────────────────────────────
 newPlaylistBtn.addEventListener("click", () => {
   const name = newPlaylistInput.value.trim();
-  if (!name) { showToast("Escribe un nombre.", "error"); return; }
+  if (!name) { showToast(UI_TEXT.playlist.writeName, "error"); return; }
   try {
     // Color aleatorio entre una paleta curada
     const colors = ["#6B3FA0","#C0392B","#1A6B8A","#2E7D32","#E67E22","#16A085","#8E44AD","#D35400"];
     const color = colors[Math.floor(Math.random() * colors.length)];
-    player.crearPlaylist(name, "", color);
+    player.createPlaylist(name, "", color);
     newPlaylistInput.value = "";
-    showToast(`Playlist "${name}" creada.`);
+    showToast(uiFormat.playlistCreated(name));
     renderAll();
-  } catch (err: any) { showToast(err.message, "error"); }
+  } catch (err: any) {
+    showToast(mapDomainErrorToMessage(err), "error");
+  }
 });
 
 newPlaylistInput.addEventListener("keydown", e => { if (e.key === "Enter") newPlaylistBtn.click(); });
+modalCancelBtn2?.addEventListener("click", closeModal);
 
 homeNavEl?.addEventListener("click", e => {
   e.preventDefault();
@@ -2194,18 +2199,18 @@ function handleDeleteTrack(title: string): void {
       audioPlayer.removeAttribute("src");
       currentProgress = 0;
     }
-    showToast(`"${title}" eliminada.`);
+    showToast(uiFormat.trackRemoved(title));
     renderAll();
   }
 }
 
 function handleDeletePlaylist(name: string): void {
   if (name === FAVORITES_PLAYLIST_NAME) {
-    showToast("No puedes eliminar la playlist Mis favoritos.", "error");
+    showToast(UI_TEXT.playlist.noDeleteFavorites, "error");
     return;
   }
-  if (player.playlists.length <= 1) { showToast("No puedes eliminar la única playlist.", "error"); return; }
-  player.eliminarPlaylist(name);
+  if (player.playlists.length <= 1) { showToast(UI_TEXT.playlist.noDeleteOnlyOne, "error"); return; }
+  player.removePlaylist(name);
   stopProgress();
   audioPlayer.removeAttribute("src");
   currentProgress = 0;
@@ -2214,7 +2219,7 @@ function handleDeletePlaylist(name: string): void {
     viewMode = "home";
     isQueuePanelOpen = false;
   }
-  showToast(`Playlist "${name}" eliminada.`);
+  showToast(uiFormat.playlistRemoved(name));
   renderAll();
 }
 
@@ -2234,7 +2239,7 @@ function startProgress(): void {
     if (audioPlayer.paused) {
       audioPlayer.play().catch(() => {
         player.isPlaying = false;
-        showToast("No se pudo reproducir el preview de esta canción.", "error");
+        showToast(UI_TEXT.player.previewError, "error");
         renderAll();
       });
     }
@@ -2280,6 +2285,44 @@ function escHtml(s: string): string {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+function applyStaticPageTexts(): void {
+  const homeNavLabel = homeNavEl?.querySelector("span");
+  if (homeNavLabel) homeNavLabel.textContent = UI_TEXT.staticPage.navHome;
+
+  const searchNavLabel = itunesSearchLinkEl?.querySelector("span");
+  if (searchNavLabel) searchNavLabel.textContent = UI_TEXT.staticPage.navSearch;
+
+  const libraryTitle = document.querySelector(".sidebar-library-header span");
+  if (libraryTitle) libraryTitle.textContent = UI_TEXT.staticPage.libraryTitle;
+
+  if (newPlaylistInput) newPlaylistInput.placeholder = UI_TEXT.staticPage.newPlaylistPlaceholder;
+  if (newPlaylistBtn) newPlaylistBtn.setAttribute("title", UI_TEXT.staticPage.newPlaylistTitle);
+
+  const modalTitle = document.querySelector("#modal .modal-header h2");
+  if (modalTitle) modalTitle.textContent = UI_TEXT.staticPage.modalTitle;
+
+  const modalLabels = document.querySelectorAll("#modal .modal-field label");
+  if (modalLabels[0]) modalLabels[0].innerHTML = `${UI_TEXT.staticPage.modalSongLabel} <span class="req">*</span>`;
+  if (modalLabels[1]) modalLabels[1].innerHTML = `${UI_TEXT.staticPage.modalArtistLabel} <span class="req">*</span>`;
+  if (modalLabels[2]) modalLabels[2].innerHTML = `${UI_TEXT.staticPage.modalDurationLabel} <small>mm:ss</small>`;
+  if (modalLabels[3]) modalLabels[3].innerHTML = `${UI_TEXT.staticPage.modalPositionLabel} <small>${UI_TEXT.staticPage.modalOptional}</small>`;
+
+  modalTitleInput.placeholder = UI_TEXT.staticPage.modalSongPlaceholder;
+  modalArtistInput.placeholder = UI_TEXT.staticPage.modalArtistPlaceholder;
+  modalDurationInput.placeholder = UI_TEXT.staticPage.modalDurationPlaceholder;
+  modalPositionInput.placeholder = UI_TEXT.staticPage.modalPositionPlaceholder;
+
+  if (modalCancelBtn2) modalCancelBtn2.textContent = UI_TEXT.staticPage.modalCancel;
+  if (modalSubmitBtn) modalSubmitBtn.textContent = UI_TEXT.staticPage.modalAdd;
+}
+
+function mapDomainErrorToMessage(error: unknown): string {
+  const code = error instanceof Error ? error.message : "";
+  if (code === "playlist_name_required") return UI_TEXT.playlist.writeName;
+  if (code === "playlist_name_exists") return UI_TEXT.playlist.nameExists;
+  return UI_TEXT.playlist.actionFailed;
+}
+
 let toastTimer: number | null = null;
 function showToast(msg: string, type: "success"|"error" = "success"): void {
   toastEl.textContent = msg;
@@ -2314,6 +2357,7 @@ const volIcon       = ()           => `<svg width="18" height="18" viewBox="0 0 
 
 // ── Arranque ──────────────────────────────────────────────
 async function bootstrap(): Promise<void> {
+  applyStaticPageTexts();
   setupScrollFallbackHandlers();
 
   const storedAccount = loadStoredAccount();

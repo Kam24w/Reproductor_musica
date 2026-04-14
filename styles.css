@@ -1096,6 +1096,11 @@ body {
 
 .home-toolbar {
   display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
 
 /* Fijar el modal de agregar canción con scroll interno real. */
 .modal.add-song-modal {
@@ -1129,11 +1134,6 @@ body {
   .modal.add-song-modal .add-song-recommendations {
     max-height: 32vh;
   }
-}
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  margin-bottom: 18px;
 }
 
 .home-search-shell {
@@ -1947,11 +1947,6 @@ body::after {
   height: 48px;
   border-radius: 12px;
   filter: drop-shadow(0 4px 12px rgba(255,122,89,.24));
-}
-
-.sidebar-logo svg {
-  color: var(--accent);
-  filter: drop-shadow(0 8px 16px rgba(255,122,89,.22));
 }
 
 .sidebar-nav {
@@ -3194,11 +3189,6 @@ body.theme-light .home-pill.active {
 
   .sidebar-logo span {
     display: none;
-  }
-
-  .sidebar-logo svg {
-    width: 28px;
-    height: 28px;
   }
 
   .sidebar-nav {

@@ -158,31 +158,31 @@ export class Playlist {
 }
 export class MusicPlayer {
     constructor() { this.playlists = []; this.currentPlaylist = null; this.isPlaying = false; }
-    crearPlaylist(nombre, cover = "", color = "#1a3a20") {
-        const n = nombre.trim();
-        if (!n)
-            throw new Error("El nombre no puede estar vacío.");
-        if (this.playlists.find(p => p.name === n))
-            throw new Error(`Ya existe "${n}".`);
-        const p = new Playlist(n, cover, color);
+    createPlaylist(name, cover = "", color = "#1a3a20") {
+        const cleanName = name.trim();
+        if (!cleanName)
+            throw new Error("playlist_name_required");
+        if (this.playlists.find(p => p.name === cleanName))
+            throw new Error("playlist_name_exists");
+        const p = new Playlist(cleanName, cover, color);
         this.playlists.push(p);
         if (!this.currentPlaylist)
             this.currentPlaylist = p;
         return p;
     }
-    cambiarPlaylist(nombre) {
-        const p = this.playlists.find(p => p.name === nombre);
+    switchPlaylist(name) {
+        const p = this.playlists.find(p => p.name === name);
         if (!p)
             return false;
         this.currentPlaylist = p;
         this.isPlaying = false;
         return true;
     }
-    eliminarPlaylist(nombre) {
-        const i = this.playlists.findIndex(p => p.name === nombre);
+    removePlaylist(name) {
+        const i = this.playlists.findIndex(p => p.name === name);
         if (i === -1)
             return false;
-        const wasActive = this.currentPlaylist?.name === nombre;
+        const wasActive = this.currentPlaylist?.name === name;
         this.playlists.splice(i, 1);
         if (wasActive) {
             this.currentPlaylist = this.playlists[0] ?? null;
