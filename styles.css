@@ -438,12 +438,19 @@ body {
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 24px 16px 16px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -.3px;
+  gap: 14px;
+  padding: 28px 16px 24px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -.4px;
   flex-shrink: 0;
+}
+
+.sidebar-logo img {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  filter: drop-shadow(0 4px 12px rgba(255,122,89,.24));
 }
 
 .sidebar-nav {
@@ -1927,11 +1934,19 @@ body::after {
 }
 
 .sidebar-logo {
-  padding: 26px 18px 18px;
+  padding: 28px 18px 24px;
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 20px;
   letter-spacing: -.4px;
+  gap: 14px;
+}
+
+.sidebar-logo img {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  filter: drop-shadow(0 4px 12px rgba(255,122,89,.24));
 }
 
 .sidebar-logo svg {
@@ -2971,15 +2986,20 @@ body.theme-light .home-pill.active {
   }
 
   .sidebar-logo {
-    padding: 14px 8px;
-    font-size: 14px;
+    padding: 16px 8px;
+    font-size: 12px;
     justify-content: center;
     align-items: center;
+    gap: 0;
   }
 
-  .sidebar-logo svg {
-    width: 32px;
-    height: 32px;
+  .sidebar-logo img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .sidebar-logo span {
+    display: none;
   }
 
   .sidebar-nav {
@@ -3162,8 +3182,18 @@ body.theme-light .home-pill.active {
   }
 
   .sidebar-logo {
-    padding: 10px 6px;
-    font-size: 12px;
+    padding: 12px 6px;
+    font-size: 11px;
+    gap: 0;
+  }
+
+  .sidebar-logo img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sidebar-logo span {
+    display: none;
   }
 
   .sidebar-logo svg {
