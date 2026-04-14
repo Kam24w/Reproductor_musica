@@ -27,7 +27,8 @@ let currentTrackDuration = 0;
 let isQueuePanelOpen = false;
 const audioPlayer = new Audio();
 audioPlayer.preload = "metadata";
-audioPlayer.volume = 0.75;
+let desiredVolume = 0.75;
+audioPlayer.volume = desiredVolume;
 let viewMode = "home";
 let homeSearchQuery = "";
 const favoriteTrackKeys = new Set();
@@ -37,6 +38,9 @@ let liveItunesTracks = [];
 let liveItunesCover = "";
 let liveItunesLoading = false;
 let liveItunesTimer = null;
+let djModeEnabled = false;
+let djTransitionToken = 0;
+const DJ_STYLE_PLAYLIST_ORDER = ["Pop Hits", "Workout Mix", "Chill Vibes", "Latin Flow", "Rock Classics", "Indie Pop"];
 let searchMenuOutsideHandler = null;
 let searchMenuKeyHandler = null;
 let addSongSearchQuery = "";
@@ -498,6 +502,132 @@ function normalizeSearchText(text) {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 }
+function ensurePlaylistCurrentNode(pl) {
+    if (!pl.current)
+        pl.current = pl.head;
+    return pl.current;
+}
+function getDjOrderedPlaylists() {
+    const candidates = player.playlists.filter(pl => pl.name !== FAVORITES_PLAYLIST_NAME && pl.size > 0);
+    const orderMap = new Map(DJ_STYLE_PLAYLIST_ORDER.map((name, index) => [name, index]));
+    return [...candidates].sort((a, b) => {
+        const ai = orderMap.has(a.name) ? orderMap.get(a.name) : Number.MAX_SAFE_INTEGER;
+        const bi = orderMap.has(b.name) ? orderMap.get(b.name) : Number.MAX_SAFE_INTEGER;
+        return ai - bi;
+    });
+}
+function pickNextDjPlaylist(currentName) {
+    const ordered = getDjOrderedPlaylists();
+    if (ordered.length === 0)
+        return null;
+    if (!currentName)
+        return ordered[0];
+    const idx = ordered.findIndex(pl => pl.name === currentName);
+    if (idx === -1)
+        return ordered[0];
+    return ordered[(idx + 1) % ordered.length];
+}
+function animateAudioVolume(from, to, durationMs, token) {
+    if (durationMs <= 0) {
+        audioPlayer.volume = Math.max(0, Math.min(1, to));
+        return Promise.resolve();
+    }
+    const start = performance.now();
+    return new Promise(resolve => {
+        const tick = () => {
+            if (token !== djTransitionToken) {
+                resolve();
+                return;
+            }
+            const now = performance.now();
+            const progress = Math.max(0, Math.min(1, (now - start) / durationMs));
+            const value = from + (to - from) * progress;
+            audioPlayer.volume = Math.max(0, Math.min(1, value));
+            if (progress >= 1) {
+                resolve();
+                return;
+            }
+            window.requestAnimationFrame(tick);
+        };
+        window.requestAnimationFrame(tick);
+    });
+}
+async function playDjTransitionToTrack(track) {
+    if (!track.previewUrl)
+        return false;
+    const token = ++djTransitionToken;
+    const fadeOutFrom = audioPlayer.paused ? 0 : audioPlayer.volume;
+    if (fadeOutFrom > 0.01) {
+        await animateAudioVolume(fadeOutFrom, 0, 550, token);
+    }
+    if (token !== djTransitionToken)
+        return true;
+    audioPlayer.pause();
+    audioPlayer.src = track.previewUrl;
+    audioPlayer.load();
+    audioPlayer.currentTime = 0;
+    audioPlayer.volume = 0;
+    try {
+        await audioPlayer.play();
+    }
+    catch (_err) {
+        audioPlayer.volume = desiredVolume;
+        return false;
+    }
+    await animateAudioVolume(0, desiredVolume, 1000, token);
+    return true;
+}
+function applyDjStyleShift(showMessage = false) {
+    const currentName = player.currentPlaylist?.name ?? null;
+    const targetPlaylist = pickNextDjPlaylist(currentName);
+    if (!targetPlaylist)
+        return null;
+    if (!player.cambiarPlaylist(targetPlaylist.name))
+        return null;
+    const node = ensurePlaylistCurrentNode(targetPlaylist);
+    if (!node)
+        return null;
+    if (showMessage) {
+        showToast(`DJ cambió el estilo a ${targetPlaylist.name}.`);
+    }
+    return node.track;
+}
+async function handleDjSkipAdvance() {
+    const track = applyDjStyleShift(true);
+    if (!track) {
+        showToast("DJ no encontró otra playlist para cambiar de estilo.", "error");
+        return;
+    }
+    player.isPlaying = true;
+    currentProgress = 0;
+    currentTrackDuration = track.duration;
+    const transitioned = await playDjTransitionToTrack(track);
+    if (!transitioned) {
+        void preparePreviewPlayback(track, true);
+    }
+    renderAll();
+}
+async function handleDjTrackEnded() {
+    const currentPlaylist = player.currentPlaylist;
+    if (!currentPlaylist)
+        return false;
+    let nextTrack = player.next();
+    if (!nextTrack) {
+        const styleTrack = applyDjStyleShift(false);
+        if (!styleTrack)
+            return false;
+        nextTrack = styleTrack;
+    }
+    player.isPlaying = true;
+    currentProgress = 0;
+    currentTrackDuration = nextTrack.duration;
+    const transitioned = await playDjTransitionToTrack(nextTrack);
+    if (!transitioned) {
+        void preparePreviewPlayback(nextTrack, true);
+    }
+    renderAll();
+    return true;
+}
 async function preparePreviewPlayback(track, restart = false) {
     if (!track.previewUrl) {
         showToast("Esta canción no tiene preview disponible en Melodify.", "error");
@@ -550,16 +680,23 @@ audioPlayer.addEventListener("loadedmetadata", () => {
     renderFooter();
 });
 audioPlayer.addEventListener("ended", () => {
-    const next = player.next();
-    currentProgress = 0;
-    if (next && player.isPlaying) {
-        startProgress();
-    }
-    else {
-        player.isPlaying = false;
-        stopProgress();
-    }
-    renderAll();
+    void (async () => {
+        if (djModeEnabled) {
+            const handled = await handleDjTrackEnded();
+            if (handled)
+                return;
+        }
+        const next = player.next();
+        currentProgress = 0;
+        if (next && player.isPlaying) {
+            startProgress();
+        }
+        else {
+            player.isPlaying = false;
+            stopProgress();
+        }
+        renderAll();
+    })();
 });
 // ═══════════════════════════════════════════════════════════
 // RENDER PRINCIPAL
@@ -1557,7 +1694,7 @@ function renderFooter() {
     const pct = currentTrackDuration > 0 ? (currentProgress / currentTrackDuration) * 100 : 0;
     const hasNext = !!pl?.current?.next;
     const hasPrev = !!pl?.current?.prev;
-    const volumePct = Math.round(audioPlayer.volume * 100);
+    const volumePct = Math.round(desiredVolume * 100);
     footerEl.innerHTML = `
     <!-- NOW PLAYING -->
     <div class="footer-left">
@@ -1581,6 +1718,7 @@ function renderFooter() {
           ${player.isPlaying ? pauseIcon(26) : playIcon(26)}
         </button>
         <button class="footer-ctrl${hasNext ? "" : " disabled"}" id="fc-next" title="Siguiente">${skipNextIcon()}</button>
+        <button class="footer-ctrl footer-dj${djModeEnabled ? " active" : ""}" id="fc-dj" title="Modo DJ">DJ</button>
       </div>
       <div class="footer-progress">
         <span class="footer-time">${formatTime(currentProgress)}</span>
@@ -1614,6 +1752,10 @@ function renderFooter() {
         renderAll();
     });
     document.getElementById("fc-next")?.addEventListener("click", () => {
+        if (djModeEnabled) {
+            void handleDjSkipAdvance();
+            return;
+        }
         const t = player.next();
         if (t) {
             currentProgress = 0;
@@ -1622,6 +1764,11 @@ function renderFooter() {
                 startProgress();
         }
         renderAll();
+    });
+    document.getElementById("fc-dj")?.addEventListener("click", () => {
+        djModeEnabled = !djModeEnabled;
+        showToast(djModeEnabled ? "Modo DJ activado." : "Modo DJ desactivado.");
+        renderFooter();
     });
     document.getElementById("fc-play")?.addEventListener("click", () => {
         if (!pl?.current)
@@ -1665,7 +1812,8 @@ function renderFooter() {
         const fill = volInput.closest(".footer-right")?.querySelector(".footer-vol-fill");
         if (fill)
             fill.style.width = volInput.value + "%";
-        audioPlayer.volume = Math.max(0, Math.min(1, Number(volInput.value) / 100));
+        desiredVolume = Math.max(0, Math.min(1, Number(volInput.value) / 100));
+        audioPlayer.volume = desiredVolume;
     });
 }
 // ═══════════════════════════════════════════════════════════
@@ -1835,6 +1983,10 @@ function startProgress() {
     progressInterval = window.setInterval(() => {
         currentProgress++;
         if (currentProgress >= currentTrackDuration) {
+            if (djModeEnabled) {
+                void handleDjTrackEnded();
+                return;
+            }
             const next = player.next();
             currentProgress = 0;
             if (next) {
