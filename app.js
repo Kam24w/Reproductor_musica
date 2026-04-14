@@ -33,6 +33,7 @@ let viewMode = "home";
 let homeSearchQuery = "";
 const favoriteTrackKeys = new Set();
 const FAVORITES_PLAYLIST_NAME = "Mis favoritos";
+const FAVORITES_STORAGE_PREFIX = "melodify-favorites:";
 let liveItunesQuery = "";
 let liveItunesTracks = [];
 let liveItunesCover = "";
@@ -475,6 +476,67 @@ function toggleTrackFavorite(track) {
         }
         showToast(`"${track.title}" agregada a favoritos.`);
     }
+    saveFavoriteKeysForCurrentAccount();
+    renderAll();
+}
+function getFavoritesStorageKeyForAccount(name) {
+    return `${FAVORITES_STORAGE_PREFIX}${normalizeSearchText(name)}`;
+}
+function saveFavoriteKeysForCurrentAccount() {
+    if (!currentAccount)
+        return;
+    try {
+        window.localStorage.setItem(getFavoritesStorageKeyForAccount(currentAccount.name), JSON.stringify(Array.from(favoriteTrackKeys)));
+    }
+    catch (_err) {
+        // Ignore storage failures in restricted environments.
+    }
+}
+function loadFavoriteKeysForCurrentAccount() {
+    favoriteTrackKeys.clear();
+    if (!currentAccount)
+        return;
+    try {
+        const raw = window.localStorage.getItem(getFavoritesStorageKeyForAccount(currentAccount.name));
+        if (!raw)
+            return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed))
+            return;
+        parsed.forEach(value => {
+            if (typeof value === "string" && value.trim()) {
+                favoriteTrackKeys.add(value);
+            }
+        });
+    }
+    catch (_err) {
+        // Ignore malformed storage values.
+    }
+}
+function syncFavoritesPlaylistFromCache() {
+    const favoritesPlaylist = ensureFavoritesPlaylist();
+    while (favoritesPlaylist.head) {
+        favoritesPlaylist.removeTrack(favoritesPlaylist.head.track.title);
+    }
+    const added = new Set();
+    player.playlists
+        .filter(pl => pl.name !== FAVORITES_PLAYLIST_NAME)
+        .forEach(pl => {
+        pl.getTracks().forEach(track => {
+            const key = trackKey(track);
+            if (!favoriteTrackKeys.has(key) || added.has(key))
+                return;
+            favoritesPlaylist.addTrackToEnd(new Track(track.title, track.artist, track.duration, track.previewUrl));
+            added.add(key);
+        });
+    });
+}
+function clearProfileSessionState() {
+    closeAccountMenu();
+    currentAccount = null;
+    favoriteTrackKeys.clear();
+    applyAccountTheme("dark");
+    syncFavoritesPlaylistFromCache();
     renderAll();
 }
 function getFavoriteEntries() {
@@ -735,6 +797,14 @@ function saveCurrentAccount() {
         // Ignore storage failures in restricted environments.
     }
 }
+function clearStoredAccount() {
+    try {
+        window.localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+    }
+    catch (_err) {
+        // Ignore storage failures in restricted environments.
+    }
+}
 function ensureAccountChipEl() {
     let chip = document.getElementById("account-chip");
     if (chip)
@@ -802,12 +872,15 @@ function ensureAccountMenuEl() {
       <button id="account-menu-cancel" class="account-menu-secondary" type="button">Cerrar</button>
       <button id="account-menu-save" class="account-menu-primary" type="button">Guardar cambios</button>
     </div>
+
+    <button id="account-menu-logout" class="account-menu-secondary" type="button">Salir del perfil</button>
   `;
     document.body.appendChild(menu);
     const closeMenu = () => closeAccountMenu();
     const saveBtn = menu.querySelector("#account-menu-save");
     const cancelBtn = menu.querySelector("#account-menu-cancel");
     const closeBtn = menu.querySelector("#account-menu-close");
+    const logoutBtn = menu.querySelector("#account-menu-logout");
     const themePicker = menu.querySelector("#account-menu-theme-picker");
     const setThemeSelection = (theme) => {
         themePicker.querySelectorAll(".account-theme-option").forEach(btn => {
@@ -820,6 +893,7 @@ function ensureAccountMenuEl() {
         });
     });
     saveBtn.addEventListener("click", () => {
+        const previousAccountName = currentAccount?.name ?? null;
         const nameInput = menu.querySelector("#account-menu-name");
         const error = menu.querySelector(".account-menu-error");
         const activeTheme = themePicker.querySelector(".account-theme-option.active")?.dataset.theme === "light"
@@ -834,10 +908,21 @@ function ensureAccountMenuEl() {
         }
         currentAccount = { name, theme: activeTheme };
         saveCurrentAccount();
+        if (previousAccountName && normalizeSearchText(previousAccountName) !== normalizeSearchText(name)) {
+            saveFavoriteKeysForCurrentAccount();
+        }
+        loadFavoriteKeysForCurrentAccount();
+        syncFavoritesPlaylistFromCache();
         applyAccountTheme(activeTheme);
         renderAccountChip();
         closeMenu();
         showToast("Ajustes guardados.");
+    });
+    logoutBtn.addEventListener("click", () => {
+        clearStoredAccount();
+        clearProfileSessionState();
+        showToast("Saliste del perfil.");
+        void promptAccountSetup();
     });
     [cancelBtn, closeBtn].forEach(btn => btn.addEventListener("click", closeMenu));
     return menu;
@@ -1088,6 +1173,8 @@ async function promptAccountSetup() {
             currentAccount = { name, theme };
             applyAccountTheme(theme);
             saveCurrentAccount();
+            loadFavoriteKeysForCurrentAccount();
+            syncFavoritesPlaylistFromCache();
             renderAccountChip();
             overlay.classList.remove("open");
             saveBtn.removeEventListener("click", submit);
@@ -2062,6 +2149,8 @@ async function bootstrap() {
         await promptAccountSetup();
     }
     await initSampleData();
+    loadFavoriteKeysForCurrentAccount();
+    syncFavoritesPlaylistFromCache();
     renderAll();
 }
 bootstrap();
