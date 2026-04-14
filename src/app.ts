@@ -112,9 +112,9 @@ async function initSampleData(): Promise<void> {
     player.currentPlaylist = null;
     viewMode = "home";
 
-    showToast("Playlists de iTunes cargadas.");
+    showToast("Playlists de Melodify cargadas.");
   } catch (_err) {
-    showToast("No se pudieron cargar las playlists iniciales de iTunes.", "error");
+    showToast("No se pudieron cargar las playlists iniciales de Melodify.", "error");
   }
 }
 
@@ -127,7 +127,7 @@ async function importItunesPlaylistFromQuery(query: string): Promise<void> {
   const cleanQuery = query.trim();
   if (!cleanQuery) return;
 
-  const playlistName = `iTunes: ${cleanQuery}`;
+  const playlistName = `Melodify: ${cleanQuery}`;
   const colors = ["#6B3FA0", "#C0392B", "#1A6B8A", "#2E7D32", "#E67E22", "#16A085", "#8E44AD", "#D35400"];
   const color = colors[Math.floor(Math.random() * colors.length)];
 
@@ -142,7 +142,7 @@ async function importItunesPlaylistFromQuery(query: string): Promise<void> {
   stopProgress();
   currentProgress = 0;
   renderAll();
-  showToast(`Resultados cargados desde iTunes: ${cleanQuery}`);
+  showToast(`Resultados cargados en Melodify: ${cleanQuery}`);
 }
 
 async function fetchItunesSongs(term: string, limit = 8): Promise<{ tracks: Track[]; cover: string }> {
@@ -154,7 +154,7 @@ async function fetchItunesSongs(term: string, limit = 8): Promise<{ tracks: Trac
 
   const response = await fetch(url.toString());
   if (!response.ok) {
-    throw new Error(`iTunes respondió con ${response.status}`);
+    throw new Error(`Melodify respondió con ${response.status}`);
   }
 
   const payload = (await response.json()) as ItunesSearchResponse;
@@ -168,7 +168,7 @@ async function fetchItunesSongs(term: string, limit = 8): Promise<{ tracks: Trac
     });
 
   if (tracks.length === 0) {
-    throw new Error("iTunes no devolvió canciones.");
+    throw new Error("Melodify no devolvió canciones.");
   }
 
   const cover = normalizeItunesArtwork(results[0]?.artworkUrl100 ?? "");
@@ -278,7 +278,7 @@ function renderAddSongModal(): void {
   const keepSearchFocus = document.activeElement?.id === "add-song-search-input";
 
   const searchState = addSongSearchLoading
-    ? `<div class="add-song-empty">Buscando canciones en iTunes...</div>`
+    ? `<div class="add-song-empty">Buscando canciones en Melodify...</div>`
     : addSongSearchQuery.trim() && addSongSearchResults.length === 0
       ? `<div class="add-song-empty">No se encontraron coincidencias para "${escHtml(addSongSearchQuery.trim())}".</div>`
       : addSongSearchQuery.trim()
@@ -308,7 +308,7 @@ function renderAddSongModal(): void {
       <div class="modal-header add-song-header">
         <div>
           <div class="add-song-kicker">Agregar canción</div>
-          <h2 id="add-song-title">Buscar en iTunes</h2>
+          <h2 id="add-song-title">Buscar en Melodify</h2>
         </div>
         <button id="add-song-close" class="modal-close-btn" type="button" aria-label="Cerrar">${closeIcon(18)}</button>
       </div>
@@ -567,7 +567,7 @@ function normalizeSearchText(text: string): string {
 
 async function preparePreviewPlayback(track: Track, restart = false): Promise<boolean> {
   if (!track.previewUrl) {
-    showToast("Esta canción no tiene preview disponible en iTunes.", "error");
+    showToast("Esta canción no tiene preview disponible en Melodify.", "error");
     return false;
   }
 
@@ -804,12 +804,12 @@ function ensureSearchModalEl(): HTMLElement {
       <div class="itunes-search-header">
         <div>
           <div class="itunes-search-kicker">Buscar</div>
-          <h2 id="itunes-search-title">Buscar en iTunes</h2>
+          <h2 id="itunes-search-title">Buscar en Melodify</h2>
         </div>
         <button id="itunes-search-close" class="itunes-search-close" type="button" aria-label="Cerrar búsqueda">${closeIcon(16)}</button>
       </div>
 
-      <p class="itunes-search-copy">Escribe un artista, canción o estado de ánimo. Importaremos una playlist nueva con resultados de iTunes.</p>
+      <p class="itunes-search-copy">Escribe un artista, canción o estado de ánimo. Importaremos una playlist nueva dentro de Melodify.</p>
 
       <label class="itunes-search-label" for="itunes-search-input">Término de búsqueda</label>
       <input id="itunes-search-input" class="itunes-search-input" type="text" placeholder="Por ejemplo: calm music, reggaeton, rock clásico" autocomplete="off" />
@@ -835,7 +835,7 @@ function ensureSearchModalEl(): HTMLElement {
     const query = input.value.trim();
     const error = overlay!.querySelector<HTMLElement>(".itunes-search-error");
     if (!query) {
-      if (error) error.textContent = "Escribe algo para buscar en iTunes.";
+      if (error) error.textContent = "Escribe algo para buscar en Melodify.";
       input.focus();
       return;
     }
@@ -849,7 +849,7 @@ function ensureSearchModalEl(): HTMLElement {
       viewMode = "home";
       renderAll();
     } catch (_err) {
-      showToast("No se pudo consultar iTunes para esa búsqueda.", "error");
+      showToast("No se pudo consultar Melodify para esa búsqueda.", "error");
     }
   };
 
@@ -1425,7 +1425,7 @@ function renderHomeContent(): void {
             : `<div class="home-empty-card">No hay coincidencias para "${escHtml(homeSearchQuery)}". Mostrando canciones disponibles.</div>`
           : featured.length > 0
           ? featured.map(pl => renderHomePlaylistCard(pl)).join("")
-          : `<div class="home-empty-card">Usa Buscar para cargar playlists desde iTunes.</div>`}
+          : `<div class="home-empty-card">Usa Buscar para cargar playlists en Melodify.</div>`}
       </div>
     </section>
 
@@ -1440,7 +1440,7 @@ function renderHomeContent(): void {
           : hasLiveResults
           ? liveItunesTracks.map(track => renderLiveItunesResult(track, liveItunesCover)).join("")
           : liveItunesLoading
-          ? `<div class="home-empty-card">Buscando en iTunes...</div>`
+          ? `<div class="home-empty-card">Buscando en Melodify...</div>`
           : `<div class="home-empty-card">No se encontraron canciones.</div>`}
       </div>
     </section>
@@ -1572,7 +1572,7 @@ function renderLiveItunesResult(track: Track, cover: string): string {
       </div>
       <div class="home-result-copy">
         <strong>${escHtml(track.title)}</strong>
-        <span>${escHtml(track.artist)} · iTunes</span>
+        <span>${escHtml(track.artist)} · Melodify</span>
       </div>
       <button class="home-result-heart${isTrackFavorite(track) ? " active" : ""}" data-favorite-track="${escHtml(track.title)}" title="${isTrackFavorite(track) ? "Quitar de favoritos" : "Agregar a favoritos"}">${favoriteIcon(isTrackFavorite(track))}</button>
       <button class="home-result-play" title="Reproducir preview">${playIcon(18)}</button>
@@ -1783,7 +1783,7 @@ function renderFooter(): void {
     if (!pl?.current) return;
     const selectedTrack = pl.current.track;
     if (!selectedTrack.previewUrl) {
-      showToast("Esta canción no tiene preview disponible en iTunes.", "error");
+      showToast("Esta canción no tiene preview disponible en Melodify.", "error");
       return;
     }
     const playing = player.togglePlay();
