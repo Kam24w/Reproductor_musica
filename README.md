@@ -1,4 +1,4 @@
-# 🎵 Melodify — Reproductor de Música con Listas Doblemente Enlazadas
+# 🎵 Melodify Reproductor de Música con Listas Doblemente Enlazadas
 
 ## Descripción
 
@@ -130,14 +130,14 @@ class MusicPlayer {
 
 ## Funcionalidades de la UI
 
-- ✅ Crear y eliminar playlists
-- ✅ Agregar canciones al final, inicio o posición específica
-- ✅ Eliminar canciones
-- ✅ Navegar entre canciones (⏮ ⏭)
-- ✅ Reproducir / Pausar con barra de progreso simulada
-- ✅ Avance automático de canción al terminar
-- ✅ Clic en la barra de progreso para saltar
-- ✅ Control de volumen visual
-- ✅ Ecualizador animado en canción activa
-- ✅ Toasts de notificación
-- ✅ Estado vacío ilustrado
+-  Crear y eliminar playlists
+-  Agregar canciones al final, inicio o posición específica
+-  Eliminar canciones
+-  Navegar entre canciones (⏮ ⏭)
+-  Reproducir / Pausar con barra de progreso simulada
+-  Avance automático de canción al terminar
+-  Clic en la barra de progreso para saltar
+-  Control de volumen visual
+-  Ecualizador animado en canción activa
+-  Toasts de notificación
+-  Estado vacío ilustrado
