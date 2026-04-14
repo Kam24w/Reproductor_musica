@@ -1,5 +1,4 @@
-import { Track, MusicPlayer } from "./models.js";
-import { UI_TEXT, uiFormat } from "./texts.js";
+"use strict";
 // ═══════════════════════════════════════════════════════════
 // CONTROLADOR UI — Melodify
 // ═══════════════════════════════════════════════════════════
@@ -36,6 +35,7 @@ let homeSearchQuery = "";
 const favoriteTrackKeys = new Set();
 const FAVORITES_PLAYLIST_NAME = UI_TEXT.playlist.favoritesName;
 const FAVORITES_STORAGE_PREFIX = "melodify-favorites:";
+const PLAYLISTS_STORAGE_KEY = "melodify-playlists";
 let liveItunesQuery = "";
 let liveItunesTracks = [];
 let liveItunesCover = "";
@@ -58,6 +58,134 @@ const ACCOUNT_STORAGE_KEY = "melodify-account";
 let accountMenuOutsideHandler = null;
 let accountMenuKeyHandler = null;
 const ITUNES_API_BASE = "https://itunes.apple.com/search";
+function loadOfflineSeedPlaylists() {
+    const offlineSeeds = [
+        {
+            name: "Pop Hits",
+            color: "#6B3FA0",
+            tracks: [
+                { title: "Sunrise Avenue", artist: "Luna Vega", duration: 201 },
+                { title: "Velvet Lights", artist: "Neon Summer", duration: 188 },
+                { title: "Echoes of You", artist: "Maya Bloom", duration: 214 }
+            ]
+        },
+        {
+            name: "Workout Mix",
+            color: "#C0392B",
+            tracks: [
+                { title: "Pulse Runner", artist: "Iron Motion", duration: 176 },
+                { title: "No Limits", artist: "Fire Circuit", duration: 193 },
+                { title: "Hard Reset", artist: "Max Torque", duration: 205 }
+            ]
+        },
+        {
+            name: "Chill Vibes",
+            color: "#1A6B8A",
+            tracks: [
+                { title: "Blue Horizon", artist: "Ocean Tape", duration: 222 },
+                { title: "Soft Rain", artist: "Cloud Harbor", duration: 207 },
+                { title: "Night Balcony", artist: "Quiet Lights", duration: 216 }
+            ]
+        },
+        {
+            name: "Latin Flow",
+            color: "#E67E22",
+            tracks: [
+                { title: "Ritmo Calido", artist: "Casa Solar", duration: 198 },
+                { title: "Baila Sin Miedo", artist: "Mar y Fuego", duration: 211 },
+                { title: "Ciudad Morena", artist: "Clave Norte", duration: 204 }
+            ]
+        },
+        {
+            name: "Rock Classics",
+            color: "#8E44AD",
+            tracks: [
+                { title: "Midnight Engine", artist: "Steel Avenue", duration: 231 },
+                { title: "Broken Compass", artist: "Stone Parade", duration: 219 },
+                { title: "Rising Voltage", artist: "The Overdrive", duration: 226 }
+            ]
+        },
+        {
+            name: "Indie Pop",
+            color: "#16A085",
+            tracks: [
+                { title: "Paper Planes", artist: "North Garden", duration: 203 },
+                { title: "City Window", artist: "Mint Street", duration: 196 },
+                { title: "Afterglow", artist: "Sunday Motel", duration: 208 }
+            ]
+        }
+    ];
+    offlineSeeds.forEach(seed => {
+        const existing = player.playlists.find(pl => pl.name === seed.name);
+        if (existing)
+            return;
+        const playlist = player.createPlaylist(seed.name, "", seed.color);
+        seed.tracks.forEach(track => {
+            playlist.addTrackToEnd(new Track(track.title, track.artist, track.duration, track.previewUrl ?? ""));
+        });
+    });
+}
+function savePlaylistsToStorage() {
+    try {
+        const payload = player.playlists
+            .filter(pl => pl.name !== FAVORITES_PLAYLIST_NAME)
+            .map(pl => ({
+            name: pl.name,
+            cover: pl.cover,
+            color: pl.color,
+            tracks: pl.getTracks().map(track => ({
+                title: track.title,
+                artist: track.artist,
+                duration: track.duration,
+                previewUrl: track.previewUrl
+            }))
+        }));
+        window.localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(payload));
+    }
+    catch (_err) {
+        // Ignore storage failures in restricted environments.
+    }
+}
+function loadPlaylistsFromStorage() {
+    try {
+        const raw = window.localStorage.getItem(PLAYLISTS_STORAGE_KEY);
+        if (!raw)
+            return false;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed))
+            return false;
+        const existingNames = player.playlists
+            .map(pl => pl.name)
+            .filter(name => name !== FAVORITES_PLAYLIST_NAME);
+        existingNames.forEach(name => player.removePlaylist(name));
+        let loaded = 0;
+        parsed.forEach((item) => {
+            const name = typeof item?.name === "string" ? item.name.trim() : "";
+            if (!name || name === FAVORITES_PLAYLIST_NAME)
+                return;
+            const cover = typeof item?.cover === "string" ? item.cover : "";
+            const color = typeof item?.color === "string" && item.color ? item.color : "#1a3a20";
+            const tracks = Array.isArray(item?.tracks) ? item.tracks : [];
+            const playlist = player.createPlaylist(name, cover, color);
+            tracks.forEach((track) => {
+                const title = typeof track?.title === "string" ? track.title.trim() : "";
+                const artist = typeof track?.artist === "string" ? track.artist.trim() : "";
+                const duration = Number.isFinite(track?.duration) ? Math.max(1, Math.round(track.duration)) : 180;
+                const previewUrl = typeof track?.previewUrl === "string" ? track.previewUrl : "";
+                if (!title || !artist)
+                    return;
+                playlist.addTrackToEnd(new Track(title, artist, duration, previewUrl));
+            });
+            loaded++;
+        });
+        player.currentPlaylist = null;
+        viewMode = "home";
+        return loaded > 0;
+    }
+    catch (_err) {
+        return false;
+    }
+}
 // ═══════════════════════════════════════════════════════════
 // DATOS DE EJEMPLO
 // ═══════════════════════════════════════════════════════════
@@ -80,10 +208,15 @@ async function initSampleData() {
         buildPlaylistFromItunes("Indie Pop", "#16A085", indie);
         player.currentPlaylist = null;
         viewMode = "home";
+        savePlaylistsToStorage();
         showToast(UI_TEXT.toast.initialPlaylistsLoaded);
     }
     catch (_err) {
-        showToast(UI_TEXT.toast.initialPlaylistsError, "error");
+        loadOfflineSeedPlaylists();
+        player.currentPlaylist = null;
+        viewMode = "home";
+        savePlaylistsToStorage();
+        showToast(UI_TEXT.toast.offlineFallbackLoaded);
     }
 }
 function buildPlaylistFromItunes(name, color, data) {
@@ -106,6 +239,7 @@ async function importItunesPlaylistFromQuery(query) {
     player.switchPlaylist(playlistName);
     stopProgress();
     currentProgress = 0;
+    savePlaylistsToStorage();
     renderAll();
     showToast(uiFormat.searchResultsLoaded(cleanQuery));
 }
@@ -363,6 +497,7 @@ function addSuggestionToCurrentPlaylist(track) {
         return;
     }
     pl.addTrackToEnd(new Track(track.title, track.artist, track.duration, track.previewUrl));
+    savePlaylistsToStorage();
     showToast(uiFormat.trackAddedToPlaylist(track.title, pl.name));
     closeModal();
     renderAll();
@@ -566,7 +701,7 @@ function normalizeSearchText(text) {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 }
-function ensurePlaylistCurrentNode(pl) {
+function ensurePlaylistCurrentEntry(pl) {
     if (!pl.current)
         pl.current = pl.head;
     return pl.current;
@@ -648,13 +783,13 @@ function applyDjStyleShift(showMessage = false) {
         return null;
     if (!player.switchPlaylist(targetPlaylist.name))
         return null;
-    const node = ensurePlaylistCurrentNode(targetPlaylist);
-    if (!node)
+    const currentEntry = ensurePlaylistCurrentEntry(targetPlaylist);
+    if (!currentEntry)
         return null;
     if (showMessage) {
         showToast(uiFormat.djStyleChanged(targetPlaylist.name));
     }
-    return node.track;
+    return currentEntry.track;
 }
 async function handleDjSkipAdvance() {
     const track = applyDjStyleShift(true);
@@ -1733,21 +1868,21 @@ function renderQueueNodes(pl) {
         return `<li class="queue-empty">${UI_TEXT.playlist.queueEmptyWithHint}</li>`;
     }
     const rows = [];
-    let node = pl.head;
+    let currentEntry = pl.head;
     let index = 1;
-    while (node) {
-        const isCurrent = pl.current === node;
+    while (currentEntry) {
+        const isCurrent = pl.current === currentEntry;
         rows.push(`
-      <li class="queue-node${isCurrent ? " current" : ""}">
+      <li class="queue-item${isCurrent ? " current" : ""}">
         <span class="queue-pos">${index}</span>
         <span class="queue-copy">
-          <strong>${escHtml(node.track.title)}</strong>
-          <small>${escHtml(node.track.artist)}</small>
+          <strong>${escHtml(currentEntry.track.title)}</strong>
+          <small>${escHtml(currentEntry.track.artist)}</small>
         </span>
-        <span class="queue-links">${node.prev ? "◀" : "·"} ${isCurrent ? "ACTUAL" : ""} ${node.next ? "▶" : "·"}</span>
+        <span class="queue-links">${currentEntry.prev ? "◀" : "·"} ${isCurrent ? "ACTUAL" : ""} ${currentEntry.next ? "▶" : "·"}</span>
       </li>
     `);
-        node = node.next;
+        currentEntry = currentEntry.next;
         index++;
     }
     return rows.join("");
@@ -1757,19 +1892,19 @@ function renderQueueUpcomingNodes(pl) {
         return `<li class="queue-empty">${UI_TEXT.playlist.queueEmpty}</li>`;
     }
     const rows = [];
-    let node = pl.current?.next ?? pl.head;
-    while (node) {
+    let nextEntry = pl.current?.next ?? pl.head;
+    while (nextEntry) {
         rows.push(`
-      <li class="queue-node">
+      <li class="queue-item">
         <div class="queue-now-cover mini">${musicNoteIcon(14)}</div>
         <span class="queue-copy">
-          <strong>${escHtml(node.track.title)}</strong>
-          <small>${escHtml(node.track.artist)}</small>
+          <strong>${escHtml(nextEntry.track.title)}</strong>
+          <small>${escHtml(nextEntry.track.artist)}</small>
         </span>
-        <span class="queue-links">${node.prev ? "◀" : "·"} ${node.next ? "▶" : "·"}</span>
+        <span class="queue-links">${nextEntry.prev ? "◀" : "·"} ${nextEntry.next ? "▶" : "·"}</span>
       </li>
     `);
-        node = node.next;
+        nextEntry = nextEntry.next;
     }
     if (rows.length === 0) {
         return `<li class="queue-empty">${UI_TEXT.playlist.queueNoUpcoming}</li>`;
@@ -1980,6 +2115,7 @@ newPlaylistBtn.addEventListener("click", () => {
         const color = colors[Math.floor(Math.random() * colors.length)];
         player.createPlaylist(name, "", color);
         newPlaylistInput.value = "";
+        savePlaylistsToStorage();
         showToast(uiFormat.playlistCreated(name));
         renderAll();
     }
@@ -2021,6 +2157,7 @@ function handleDeleteTrack(title) {
             audioPlayer.removeAttribute("src");
             currentProgress = 0;
         }
+        savePlaylistsToStorage();
         showToast(uiFormat.trackRemoved(title));
         renderAll();
     }
@@ -2043,6 +2180,7 @@ function handleDeletePlaylist(name) {
         viewMode = "home";
         isQueuePanelOpen = false;
     }
+    savePlaylistsToStorage();
     showToast(uiFormat.playlistRemoved(name));
     renderAll();
 }
@@ -2195,7 +2333,11 @@ async function bootstrap() {
     else {
         await promptAccountSetup();
     }
-    await initSampleData();
+    ensureFavoritesPlaylist();
+    const restoredFromStorage = loadPlaylistsFromStorage();
+    if (!restoredFromStorage) {
+        await initSampleData();
+    }
     loadFavoriteKeysForCurrentAccount();
     syncFavoritesPlaylistFromCache();
     renderAll();

@@ -1,4 +1,5 @@
-export const UI_TEXT = {
+"use strict";
+const UI_TEXT = {
     staticPage: {
         navHome: "Inicio",
         navSearch: "Buscar",
@@ -127,6 +128,7 @@ export const UI_TEXT = {
     toast: {
         initialPlaylistsLoaded: "Playlists de Melodify cargadas.",
         initialPlaylistsError: "No se pudieron cargar las playlists iniciales de Melodify.",
+        offlineFallbackLoaded: "Sin conexion: cargamos playlists locales para que uses la app al abrir index.html.",
         favoritesRemovedSuffix: "quitada de favoritos.",
         favoritesAddedSuffix: "agregada a favoritos.",
         trackAddedToPlaylistSuffix: "agregada a",
@@ -135,7 +137,7 @@ export const UI_TEXT = {
         playlistRemovedPrefix: "Playlist"
     }
 };
-export const uiFormat = {
+const uiFormat = {
     playlistMeta: (size) => `Playlist · ${size} ${UI_TEXT.common.songsWord}`,
     searchResultsLoaded: (query) => `Resultados cargados en Melodify: ${query}`,
     trackAddedToPlaylist: (trackTitle, playlistName) => `"${trackTitle}" ${UI_TEXT.toast.trackAddedToPlaylistSuffix} ${playlistName}.`,

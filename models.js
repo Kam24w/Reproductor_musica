@@ -1,7 +1,8 @@
+"use strict";
 // ============================================================
-// MODELOS DE DOMINIO — Reproductor de Música
+// DOMAIN MODELS — Melodify Music Player
 // ============================================================
-export class Track {
+class Track {
     constructor(title, artist, duration, previewUrl = "") {
         this.title = title;
         this.artist = artist;
@@ -14,14 +15,14 @@ export class Track {
         return `${mins}:${secs.toString().padStart(2, "0")}`;
     }
 }
-export class PlaylistNode {
+class PlaylistEntry {
     constructor(track) {
         this.track = track;
         this.next = null;
         this.prev = null;
     }
 }
-export class Playlist {
+class Playlist {
     constructor(name, cover = "", color = "#1a3a20") {
         this.name = name;
         this.cover = cover;
@@ -34,26 +35,26 @@ export class Playlist {
     get size() { return this._size; }
     get isEmpty() { return this._size === 0; }
     addTrackToStart(track) {
-        const node = new PlaylistNode(track);
+        const entry = new PlaylistEntry(track);
         if (this.isEmpty) {
-            this.head = this.tail = this.current = node;
+            this.head = this.tail = this.current = entry;
         }
         else {
-            node.next = this.head;
-            this.head.prev = node;
-            this.head = node;
+            entry.next = this.head;
+            this.head.prev = entry;
+            this.head = entry;
         }
         this._size++;
     }
     addTrackToEnd(track) {
-        const node = new PlaylistNode(track);
+        const entry = new PlaylistEntry(track);
         if (this.isEmpty) {
-            this.head = this.tail = this.current = node;
+            this.head = this.tail = this.current = entry;
         }
         else {
-            node.prev = this.tail;
-            this.tail.next = node;
-            this.tail = node;
+            entry.prev = this.tail;
+            this.tail.next = entry;
+            this.tail = entry;
         }
         this._size++;
     }
@@ -71,42 +72,42 @@ export class Playlist {
         let cur = this.head;
         for (let i = 0; i < position; i++)
             cur = cur.next;
-        const node = new PlaylistNode(track);
+        const entry = new PlaylistEntry(track);
         const prev = cur.prev;
-        node.next = cur;
-        node.prev = prev;
-        prev.next = node;
-        cur.prev = node;
+        entry.next = cur;
+        entry.prev = prev;
+        prev.next = entry;
+        cur.prev = entry;
         this._size++;
     }
     removeTrack(title) {
         if (this.isEmpty)
             return false;
-        let node = this.head;
-        while (node && node.track.title !== title)
-            node = node.next;
-        if (!node)
+        let entry = this.head;
+        while (entry && entry.track.title !== title)
+            entry = entry.next;
+        if (!entry)
             return false;
-        if (this.current === node)
-            this.current = node.next ?? node.prev ?? null;
+        if (this.current === entry)
+            this.current = entry.next ?? entry.prev ?? null;
         if (this._size === 1) {
             this.head = this.tail = this.current = null;
             this._size--;
             return true;
         }
-        if (node === this.head) {
-            this.head = node.next;
+        if (entry === this.head) {
+            this.head = entry.next;
             this.head.prev = null;
         }
-        else if (node === this.tail) {
-            this.tail = node.prev;
+        else if (entry === this.tail) {
+            this.tail = entry.prev;
             this.tail.next = null;
         }
         else {
-            node.prev.next = node.next;
-            node.next.prev = node.prev;
+            entry.prev.next = entry.next;
+            entry.next.prev = entry.prev;
         }
-        node.next = node.prev = null;
+        entry.next = entry.prev = null;
         this._size--;
         return true;
     }
@@ -123,30 +124,30 @@ export class Playlist {
         return this.current.track;
     }
     selectTrack(title) {
-        let node = this.head;
-        while (node) {
-            if (node.track.title === title) {
-                this.current = node;
+        let entry = this.head;
+        while (entry) {
+            if (entry.track.title === title) {
+                this.current = entry;
                 return true;
             }
-            node = node.next;
+            entry = entry.next;
         }
         return false;
     }
     getTracks() {
         const tracks = [];
-        let node = this.head;
-        while (node) {
-            tracks.push(node.track);
-            node = node.next;
+        let entry = this.head;
+        while (entry) {
+            tracks.push(entry.track);
+            entry = entry.next;
         }
         return tracks;
     }
     totalDuration() {
-        let t = 0, node = this.head;
-        while (node) {
-            t += node.track.duration;
-            node = node.next;
+        let t = 0, entry = this.head;
+        while (entry) {
+            t += entry.track.duration;
+            entry = entry.next;
         }
         return t;
     }
@@ -156,7 +157,7 @@ export class Playlist {
         return h > 0 ? `${h} hr ${m} min` : `${m} min`;
     }
 }
-export class MusicPlayer {
+class MusicPlayer {
     constructor() { this.playlists = []; this.currentPlaylist = null; this.isPlaying = false; }
     createPlaylist(name, cover = "", color = "#1a3a20") {
         const cleanName = name.trim();

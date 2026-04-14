@@ -220,7 +220,7 @@ body.theme-light .home-recent-card,
 body.theme-light .home-result-row,
 body.theme-light .queue-sidebar,
 body.theme-light .queue-now-item,
-body.theme-light .queue-node,
+body.theme-light .queue-item,
 body.theme-light .queue-empty,
 body.theme-light .sidebar-pl-item.active,
 body.theme-light .sidebar-pl-item:hover,
@@ -863,7 +863,7 @@ body {
   gap: 8px;
 }
 
-.queue-node {
+.queue-item {
   display: grid;
   grid-template-columns: 42px 1fr auto;
   align-items: center;
@@ -873,7 +873,7 @@ body {
   background: rgba(255,255,255,.05);
 }
 
-.queue-node.current {
+.queue-item.current {
   border: 1px solid rgba(29,185,84,.45);
   background: rgba(29,185,84,.13);
 }
@@ -2038,7 +2038,7 @@ body::after {
 .home-result-row,
 .track-row,
 .queue-now-item,
-.queue-node,
+.queue-item,
 .queue-empty,
 .home-empty-card,
 .tracks-empty,
@@ -2055,7 +2055,7 @@ body::after {
 .home-result-row,
 .track-row,
 .queue-now-item,
-.queue-node {
+.queue-item {
   background: rgba(255,255,255,.045);
   border: 1px solid rgba(255,255,255,.06);
   box-shadow: 0 12px 32px rgba(0,0,0,.12);
@@ -2067,7 +2067,7 @@ body::after {
 .home-recent-card:hover,
 .home-result-row:hover,
 .track-row:hover,
-.queue-node.current {
+.queue-item.current {
   background: rgba(255,255,255,.08);
   border-color: rgba(255,255,255,.14);
   box-shadow: 0 16px 36px rgba(0,0,0,.18);
@@ -2429,7 +2429,7 @@ body.theme-light .home-playlist-card:hover,
 body.theme-light .home-recent-card:hover,
 body.theme-light .home-result-row:hover,
 body.theme-light .track-row:hover,
-body.theme-light .queue-node.current {
+body.theme-light .queue-item.current {
   background: rgba(255,255,255,.84);
   border-color: rgba(30,45,66,.12);
 }
